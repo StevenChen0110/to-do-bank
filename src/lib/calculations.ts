@@ -1,4 +1,4 @@
-import { format, isSameDay, parseISO, startOfDay } from 'date-fns';
+import { isSameDay, parseISO } from 'date-fns';
 import type { Task, Transaction, Wish, WishStatus } from '../types';
 
 export function getCurrentBalance(transactions: Transaction[]): number {
@@ -41,7 +41,7 @@ export function getWishShortfall(wish: Wish, balance: number): number {
 export function groupTasksByDate(tasks: Task[]): Map<string, Task[]> {
   const groups = new Map<string, Task[]>();
   for (const task of tasks) {
-    const key = format(startOfDay(parseISO(task.scheduledDate)), 'yyyy-MM-dd');
+    const key = task.scheduledDate;
     const list = groups.get(key) ?? [];
     list.push(task);
     groups.set(key, list);

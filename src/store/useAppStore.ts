@@ -8,6 +8,7 @@ import type {
   Transaction,
   Wish,
 } from '../types';
+import { localDateString } from '../lib/dates';
 import { loadAppData, saveAppData } from '../lib/storage';
 
 type PersistableState = Pick<
@@ -116,7 +117,7 @@ export const useAppStore = create<AppStore>((set) => ({
       return;
     }
     const now = new Date().toISOString();
-    const scheduledDate = date ?? now.slice(0, 10);
+    const scheduledDate = date ?? localDateString();
     set((state) => {
       const task: Task = {
         id: uuidv4(),
