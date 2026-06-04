@@ -40,7 +40,14 @@ export function Toaster() {
             )}
           >
             <ToastIcon kind={toast.kind} />
-            <span>{toast.message}</span>
+            <div className="min-w-0 flex-1">
+              <p>{toast.message}</p>
+              {toast.detail ? (
+                <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                  {toast.detail}
+                </p>
+              ) : null}
+            </div>
           </motion.div>
         ))}
       </AnimatePresence>

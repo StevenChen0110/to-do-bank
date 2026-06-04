@@ -33,6 +33,7 @@ interface AppStore extends PersistableState {
   ) => void;
   deleteWish: (wishId: string) => void;
   redeemWish: (wishId: string) => void;
+  setPinnedWishId: (wishId: string | null) => void;
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -63,7 +64,18 @@ function toPersistable(state: AppStore): PersistableState {
 
 const initialSettings: AppSettings = {
   defaultTaskReward: 10,
+  pinnedWishId: null,
 };
+
+function settingsWithoutPinned(
+  settings: AppSettings,
+  wishId: string,
+): AppSettings {
+  if (settings.pinnedWishId !== wishId) {
+    return settings;
+  }
+  return { ...settings, pinnedWishId: null };
+}
 
 function completeTaskInState(
   state: AppStore,
@@ -223,6 +235,7 @@ export const useAppStore = create<AppStore>((set) => ({
       const next: AppStore = {
         ...state,
         wishes: state.wishes.filter((w) => w.id !== wishId),
+        settings: settingsWithoutPinned(state.settings, wishId),
       };
       schedulePersist(toPersistable(next));
       return next;
@@ -257,6 +270,18 @@ export const useAppStore = create<AppStore>((set) => ({
           w.id === wishId ? { ...w, redeemedAt: now } : w,
         ),
         transactions: [...state.transactions, transaction],
+        settings: settingsWithoutPinned(state.settings, wishId),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  setPinnedWishId: (wishId) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        settings: { ...state.settings, pinnedWishId: wishId },
       };
       schedulePersist(toPersistable(next));
       return next;

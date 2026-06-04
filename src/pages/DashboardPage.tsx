@@ -1,4 +1,5 @@
-import { findNearestUnlockWish, getDailyEarned } from '@/lib/calculations';
+import { getDailyEarned } from '@/lib/calculations';
+import { resolveDashboardWish } from '@/lib/pinnedWish';
 import { useBalance } from '@/hooks/useBalance';
 import { useJustUnlockedWishId } from '@/hooks/useJustUnlockedWishId';
 import { useTodayTasks } from '@/hooks/useTodayTasks';
@@ -10,10 +11,15 @@ import { NearestWishCard } from '@/components/dashboard/NearestWishCard';
 export function DashboardPage() {
   const wishes = useAppStore((s) => s.wishes);
   const transactions = useAppStore((s) => s.transactions);
+  const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
   const { balance, totalEarned } = useBalance();
   const todayTasks = useTodayTasks();
   const dailyEarned = getDailyEarned(transactions, new Date());
-  const nearestWish = findNearestUnlockWish(wishes, balance);
+  const { wish: dashboardWish, isPinned } = resolveDashboardWish(
+    wishes,
+    balance,
+    pinnedWishId,
+  );
   const justUnlockedId = useJustUnlockedWishId(wishes, balance);
 
   return (
@@ -21,10 +27,11 @@ export function DashboardPage() {
       <BalanceHero balance={balance} totalEarned={totalEarned} />
       <TodaySnapshot tasks={todayTasks} dailyEarned={dailyEarned} />
       <NearestWishCard
-        wish={nearestWish}
+        wish={dashboardWish}
         balance={balance}
+        isPinned={isPinned}
         highlightUnlock={
-          nearestWish !== null && nearestWish.id === justUnlockedId
+          dashboardWish !== null && dashboardWish.id === justUnlockedId
         }
       />
     </div>

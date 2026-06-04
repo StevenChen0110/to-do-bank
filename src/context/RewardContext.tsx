@@ -23,6 +23,7 @@ export type ToastKind = 'success' | 'info' | 'default';
 export interface ToastItem {
   id: number;
   message: string;
+  detail?: string;
   kind: ToastKind;
 }
 
@@ -30,7 +31,7 @@ interface RewardContextValue {
   bursts: RewardBurst[];
   toasts: ToastItem[];
   triggerReward: (amount: number, origin?: BurstOrigin) => void;
-  showToast: (message: string, kind?: ToastKind) => void;
+  showToast: (message: string, kind?: ToastKind, detail?: string) => void;
   dismissBurst: (id: number) => void;
   dismissToast: (id: number) => void;
 }
@@ -52,13 +53,15 @@ export function RewardProvider({ children }: { children: ReactNode }) {
     }, 1400);
   }, []);
 
-  const showToast = useCallback((message: string, kind: ToastKind = 'default') => {
+  const showToast = useCallback(
+    (message: string, kind: ToastKind = 'default', detail?: string) => {
     const id = ++toastId;
-    setToasts((prev) => [...prev, { id, message, kind }]);
+    setToasts((prev) => [...prev, { id, message, detail, kind }]);
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3200);
-  }, []);
+  },
+  []);
 
   const dismissBurst = useCallback((id: number) => {
     setBursts((prev) => prev.filter((b) => b.id !== id));

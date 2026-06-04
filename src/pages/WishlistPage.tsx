@@ -15,6 +15,8 @@ export function WishlistPage() {
   const wishes = useAppStore((s) => s.wishes);
   const redeemWish = useAppStore((s) => s.redeemWish);
   const deleteWish = useAppStore((s) => s.deleteWish);
+  const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
+  const setPinnedWishId = useAppStore((s) => s.setPinnedWishId);
   const { balance } = useBalance();
   const { showToast } = useReward();
   const [filter, setFilter] = useState<WishFilter>('all');
@@ -63,6 +65,20 @@ export function WishlistPage() {
     showToast(`已兌換「${redeemTarget.title}」`, 'success');
   };
 
+  const handleTogglePin = (wishId: string) => {
+    const next = pinnedWishId === wishId ? null : wishId;
+    setPinnedWishId(next);
+    if (next) {
+      const wish = wishes.find((w) => w.id === wishId);
+      showToast(
+        wish ? `已釘選「${wish.title}」為主目標` : '已設為主目標',
+        'info',
+      );
+    } else {
+      showToast('已取消主目標釘選', 'info');
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <WishFormDialog />
@@ -87,8 +103,10 @@ export function WishlistPage() {
                   key={wish.id}
                   wish={wish}
                   balance={balance}
+                  isPinned={pinnedWishId === wish.id}
                   onRedeem={handleRedeemClick}
                   onDelete={deleteWish}
+                  onTogglePin={handleTogglePin}
                 />
               ))}
             </div>

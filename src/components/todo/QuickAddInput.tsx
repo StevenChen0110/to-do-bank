@@ -6,6 +6,15 @@ import {
   useReward,
 } from '@/context/RewardContext';
 import type { TaskCategory } from '@/types';
+import {
+  formatTitleWithCategoryPrefix,
+  stripCategoryPrefix,
+} from '@/lib/categoryPrefix';
+import { getCurrentBalance } from '@/lib/calculations';
+import {
+  formatPinnedGoalNarrative,
+  isPinnedWishActive,
+} from '@/lib/pinnedWish';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -23,18 +32,38 @@ export function QuickAddInput() {
   const formRef = useRef<HTMLFormElement>(null);
   const logCompletedTask = useAppStore((s) => s.logCompletedTask);
   const defaultReward = useAppStore((s) => s.settings.defaultTaskReward);
+  const wishes = useAppStore((s) => s.wishes);
+  const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
   const { triggerReward, showToast } = useReward();
 
+  const selectCategory = (id: TaskCategory) => {
+    setCategory(id);
+    setTitle((prev) => formatTitleWithCategoryPrefix(prev, id));
+  };
+
   const submit = () => {
-    const trimmed = title.trim();
+    const trimmed = stripCategoryPrefix(title.trim());
     if (!trimmed) {
       return;
     }
     logCompletedTask(trimmed, category);
     const origin = burstOriginFromElement(formRef.current);
     triggerReward(defaultReward, origin);
-    showToast(`+NT$${defaultReward} 已入帳`, 'success');
+
+    let detail: string | undefined;
+    if (isPinnedWishActive(wishes, pinnedWishId)) {
+      const pinned = wishes.find((w) => w.id === pinnedWishId);
+      if (pinned) {
+        const balanceAfter = getCurrentBalance(
+          useAppStore.getState().transactions,
+        );
+        detail = formatPinnedGoalNarrative(pinned, balanceAfter);
+      }
+    }
+
+    showToast(`+NT$${defaultReward} 已入帳`, 'success', detail);
     setTitle('');
+    setCategory('other');
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -58,7 +87,7 @@ export function QuickAddInput() {
             <button
               key={id}
               type="button"
-              onClick={() => setCategory(id)}
+              onClick={() => selectCategory(id)}
               className={cn(
                 'min-h-9 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors active:scale-95',
                 selected

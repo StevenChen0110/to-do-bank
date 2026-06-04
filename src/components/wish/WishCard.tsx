@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
-import { Gift, Trash2 } from 'lucide-react';
+import { Gift, Pin, Trash2 } from 'lucide-react';
 import {
   getWishProgress,
   getWishShortfall,
@@ -22,15 +22,19 @@ const STATUS_LABELS: Record<WishStatus, string> = {
 interface WishCardProps {
   wish: Wish;
   balance: number;
+  isPinned: boolean;
   onRedeem: (wish: Wish) => void;
   onDelete: (wishId: string) => void;
+  onTogglePin: (wishId: string) => void;
 }
 
 export function WishCard({
   wish,
   balance,
+  isPinned,
   onRedeem,
   onDelete,
+  onTogglePin,
 }: WishCardProps) {
   const status = getWishStatus(wish, balance);
   const progress = getWishProgress(wish, balance);
@@ -124,7 +128,19 @@ export function WishCard({
         </>
       )}
 
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
+        {status !== 'redeemed' && (
+          <Button
+            type="button"
+            variant={isPinned ? 'default' : 'outline'}
+            className="min-h-11 flex-1"
+            onClick={() => onTogglePin(wish.id)}
+            aria-pressed={isPinned}
+          >
+            <Pin className={cn('h-4 w-4', isPinned && 'fill-current')} />
+            {isPinned ? '已釘選主目標' : '設為主目標'}
+          </Button>
+        )}
         {status === 'available' && (
           <Button
             type="button"

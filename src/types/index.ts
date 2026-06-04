@@ -35,6 +35,8 @@ export interface Transaction {
 
 export interface AppSettings {
   defaultTaskReward: number;
+  /** Dashboard + deposit narrative focus wish */
+  pinnedWishId: string | null;
 }
 
 export interface AppData {

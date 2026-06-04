@@ -15,12 +15,15 @@ interface NearestWishCardProps {
   wish: Wish | null;
   balance: number;
   highlightUnlock?: boolean;
+  /** When true, card reflects the user-pinned main goal */
+  isPinned?: boolean;
 }
 
 export function NearestWishCard({
   wish,
   balance,
   highlightUnlock = false,
+  isPinned = false,
 }: NearestWishCardProps) {
   if (!wish) {
     return (
@@ -72,7 +75,9 @@ export function NearestWishCard({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-sm font-semibold">最接近解鎖</h2>
+        <h2 className="text-sm font-semibold">
+          {isPinned ? '主目標' : '最接近解鎖'}
+        </h2>
         {unlocked ? (
           <Badge variant="success" className="gap-1">
             <Sparkles className="h-3 w-3" />

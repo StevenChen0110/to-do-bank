@@ -10,6 +10,7 @@ export const EMPTY_DATA: AppData = {
   transactions: [],
   settings: {
     defaultTaskReward: 10,
+    pinnedWishId: null,
   } satisfies AppSettings,
 };
 
@@ -48,6 +49,7 @@ export async function loadAppData(): Promise<AppData> {
       ...stored.settings,
       defaultTaskReward:
         stored.settings?.defaultTaskReward ?? EMPTY_DATA.settings.defaultTaskReward,
+      pinnedWishId: stored.settings?.pinnedWishId ?? null,
     },
   };
 }
