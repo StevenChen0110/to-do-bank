@@ -2,6 +2,8 @@ export type TaskCategory = 'work' | 'study' | 'health' | 'life' | 'other';
 
 export type TransactionType = 'task_complete' | 'task_revoke' | 'wish_redeem';
 
+export type TaskSize = 'small' | 'big';
+
 /** Derived from balance + redemption; not persisted on Wish */
 export type WishStatus = 'locked' | 'available' | 'redeemed';
 
@@ -33,8 +35,22 @@ export interface Transaction {
   note?: string;
 }
 
+export interface JournalEntry {
+  id: string;
+  /** Local calendar day yyyy-MM-dd */
+  date: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Set when diary completion was credited as a task */
+  creditedTaskId?: string;
+}
+
 export interface AppSettings {
-  defaultTaskReward: number;
+  smallTaskReward: number;
+  bigTaskReward: number;
+  soundEnabled: boolean;
+  diaryCountsAsTask: boolean;
   /** Dashboard + deposit narrative focus wish */
   pinnedWishId: string | null;
 }
@@ -44,6 +60,7 @@ export interface AppData {
   tasks: Task[];
   wishes: Wish[];
   transactions: Transaction[];
+  journalEntries: JournalEntry[];
   settings: AppSettings;
 }
 
@@ -55,4 +72,9 @@ export interface LegacyWish {
   status?: 'active' | 'redeemed';
   createdAt: string;
   redeemedAt: string | null;
+}
+
+export interface LogTaskOptions {
+  rewardAmount?: number;
+  taskSize?: TaskSize;
 }

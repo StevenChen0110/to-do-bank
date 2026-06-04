@@ -58,3 +58,18 @@ body {
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
 }
+
+@keyframes hud-float-up {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-1.25rem);
+  }
+}
+
+.hud-float {
+  animation: hud-float-up 1s ease-out forwards;
+}

@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import {
   getWishProgress,
@@ -39,33 +38,7 @@ export function NearestWishCard({
   const unlocked = status === 'available';
 
   return (
-    <motion.section
-      layout
-      animate={
-        highlightUnlock
-          ? {
-              scale: [1, 1.02, 1],
-              boxShadow: [
-                '0 0 0 0 rgba(16, 185, 129, 0)',
-                '0 0 28px 6px rgba(16, 185, 129, 0.4)',
-                '0 0 0 0 rgba(16, 185, 129, 0)',
-              ],
-            }
-          : unlocked
-            ? {
-                boxShadow: [
-                  '0 0 0 0 rgba(16, 185, 129, 0)',
-                  '0 0 0 4px rgba(16, 185, 129, 0.2)',
-                  '0 0 0 0 rgba(16, 185, 129, 0)',
-                ],
-              }
-            : {}
-      }
-      transition={{
-        duration: highlightUnlock ? 1.2 : 1.5,
-        repeat: highlightUnlock ? 0 : unlocked ? Infinity : 0,
-        repeatDelay: 2,
-      }}
+    <section
       className={cn(
         'rounded-xl border bg-card p-4 shadow-sm',
         unlocked || highlightUnlock
@@ -95,6 +68,6 @@ export function NearestWishCard({
       <p className="mt-2 text-xs text-muted-foreground">
         目標 {formatCurrency(wish.cost)}
       </p>
-    </motion.section>
+    </section>
   );
 }

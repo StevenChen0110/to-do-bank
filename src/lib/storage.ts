@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval';
 import type { AppData, AppSettings, LegacyWish, Wish } from '../types';
+import { normalizeSettings } from './settings';
 
 const STORAGE_KEY = 'todo-bank-app-data';
 
@@ -8,10 +9,8 @@ export const EMPTY_DATA: AppData = {
   tasks: [],
   wishes: [],
   transactions: [],
-  settings: {
-    defaultTaskReward: 10,
-    pinnedWishId: null,
-  } satisfies AppSettings,
+  journalEntries: [],
+  settings: normalizeSettings(undefined),
 };
 
 function normalizeWish(raw: LegacyWish): Wish {
@@ -29,8 +28,29 @@ function normalizeWish(raw: LegacyWish): Wish {
   };
 }
 
+function sanitizeLoadedData(data: AppData): AppData {
+  const tasks = (data.tasks ?? []).filter((task) => task.completedAt !== null);
+  const taskIds = new Set(tasks.map((task) => task.id));
+
+  const journalEntries = (data.journalEntries ?? []).map((entry) => {
+    if (entry.creditedTaskId && !taskIds.has(entry.creditedTaskId)) {
+      const { creditedTaskId: _removed, ...rest } = entry;
+      return rest;
+    }
+    return entry;
+  });
+
+  return { ...data, tasks, journalEntries };
+}
+
 export async function loadAppData(): Promise<AppData> {
-  const stored = await get<AppData & { wishes?: LegacyWish[] }>(STORAGE_KEY);
+  const stored = await get<
+    AppData & {
+      wishes?: LegacyWish[];
+      settings?: AppSettings & { defaultTaskReward?: number };
+      journalEntries?: AppData['journalEntries'];
+    }
+  >(STORAGE_KEY);
   if (!stored || stored.version !== 1) {
     return { ...EMPTY_DATA };
   }
@@ -39,19 +59,14 @@ export async function loadAppData(): Promise<AppData> {
       ? normalizeWish(w as LegacyWish)
       : (w as Wish),
   );
-  return {
+  return sanitizeLoadedData({
     version: 1,
     tasks: stored.tasks ?? [],
     wishes,
     transactions: stored.transactions ?? [],
-    settings: {
-      ...EMPTY_DATA.settings,
-      ...stored.settings,
-      defaultTaskReward:
-        stored.settings?.defaultTaskReward ?? EMPTY_DATA.settings.defaultTaskReward,
-      pinnedWishId: stored.settings?.pinnedWishId ?? null,
-    },
-  };
+    journalEntries: stored.journalEntries ?? [],
+    settings: normalizeSettings(stored.settings),
+  });
 }
 
 export async function saveAppData(data: AppData): Promise<void> {

@@ -73,7 +73,7 @@ src/
     dashboard/        # BalanceHero、AnimatedCounter、NearestWishCard
     todo/             # QuickAddInput、TaskList
     wish/             # WishCard、Dialogs
-    effects/          # CoinBurst、Toaster
+    effects/          # Toaster
     ui/               # shadcn 元件
   pages/              # 三 Tab 頁面
 public/

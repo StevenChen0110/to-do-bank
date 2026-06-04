@@ -2,21 +2,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-
-export interface BurstOrigin {
-  x: number;
-  y: number;
-}
-
-export interface RewardBurst {
-  id: number;
-  amount: number;
-  origin?: BurstOrigin;
-}
+import { useBalance } from '@/hooks/useBalance';
 
 export type ToastKind = 'success' | 'info' | 'default';
 
@@ -28,44 +20,52 @@ export interface ToastItem {
 }
 
 interface RewardContextValue {
-  bursts: RewardBurst[];
   toasts: ToastItem[];
-  triggerReward: (amount: number, origin?: BurstOrigin) => void;
   showToast: (message: string, kind?: ToastKind, detail?: string) => void;
-  dismissBurst: (id: number) => void;
   dismissToast: (id: number) => void;
+  /** 最近一次餘額增加量；約 1 秒後清除，供 GoalChip 浮字 */
+  balanceCreditDelta: number | null;
 }
 
 const RewardContext = createContext<RewardContextValue | null>(null);
 
-let burstId = 0;
 let toastId = 0;
 
 export function RewardProvider({ children }: { children: ReactNode }) {
-  const [bursts, setBursts] = useState<RewardBurst[]>([]);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const { balance } = useBalance();
+  const prevBalanceRef = useRef(balance);
+  const skipInitialBalanceRef = useRef(true);
+  const [balanceCreditDelta, setBalanceCreditDelta] = useState<number | null>(
+    null,
+  );
 
-  const triggerReward = useCallback((amount: number, origin?: BurstOrigin) => {
-    const id = ++burstId;
-    setBursts((prev) => [...prev, { id, amount, origin }]);
-    window.setTimeout(() => {
-      setBursts((prev) => prev.filter((b) => b.id !== id));
-    }, 1400);
-  }, []);
+  useEffect(() => {
+    if (skipInitialBalanceRef.current) {
+      skipInitialBalanceRef.current = false;
+      prevBalanceRef.current = balance;
+      return;
+    }
+    const delta = balance - prevBalanceRef.current;
+    prevBalanceRef.current = balance;
+    if (delta <= 0) {
+      return;
+    }
+    setBalanceCreditDelta(delta);
+    const timer = window.setTimeout(() => setBalanceCreditDelta(null), 1000);
+    return () => window.clearTimeout(timer);
+  }, [balance]);
 
   const showToast = useCallback(
     (message: string, kind: ToastKind = 'default', detail?: string) => {
-    const id = ++toastId;
-    setToasts((prev) => [...prev, { id, message, detail, kind }]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3200);
-  },
-  []);
-
-  const dismissBurst = useCallback((id: number) => {
-    setBursts((prev) => prev.filter((b) => b.id !== id));
-  }, []);
+      const id = ++toastId;
+      setToasts((prev) => [...prev, { id, message, detail, kind }]);
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 3200);
+    },
+    [],
+  );
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -73,14 +73,12 @@ export function RewardProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      bursts,
       toasts,
-      triggerReward,
       showToast,
-      dismissBurst,
       dismissToast,
+      balanceCreditDelta,
     }),
-    [bursts, toasts, triggerReward, showToast, dismissBurst, dismissToast],
+    [toasts, showToast, dismissToast, balanceCreditDelta],
   );
 
   return (
@@ -94,16 +92,4 @@ export function useReward() {
     throw new Error('useReward must be used within RewardProvider');
   }
   return ctx;
-}
-
-/** Center of a DOM element for burst origin */
-export function burstOriginFromElement(el: HTMLElement | null): BurstOrigin | undefined {
-  if (!el) {
-    return undefined;
-  }
-  const rect = el.getBoundingClientRect();
-  return {
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-  };
 }

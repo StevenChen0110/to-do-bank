@@ -17,16 +17,29 @@ export function isPinnedWishActive(
   return wish !== undefined && wish.redeemedAt === null;
 }
 
+/** 僅回傳有效釘選的主目標（不含「最接近解鎖」fallback） */
+export function resolvePinnedWish(
+  wishes: Wish[],
+  pinnedWishId: string | null,
+): Wish | null {
+  if (!pinnedWishId) {
+    return null;
+  }
+  const pinned = wishes.find((w) => w.id === pinnedWishId);
+  if (pinned && pinned.redeemedAt === null) {
+    return pinned;
+  }
+  return null;
+}
+
 export function resolveDashboardWish(
   wishes: Wish[],
   balance: number,
   pinnedWishId: string | null,
 ): { wish: Wish | null; isPinned: boolean } {
-  if (pinnedWishId) {
-    const pinned = wishes.find((w) => w.id === pinnedWishId);
-    if (pinned && pinned.redeemedAt === null) {
-      return { wish: pinned, isPinned: true };
-    }
+  const pinned = resolvePinnedWish(wishes, pinnedWishId);
+  if (pinned) {
+    return { wish: pinned, isPinned: true };
   }
   return {
     wish: findNearestUnlockWish(wishes, balance),

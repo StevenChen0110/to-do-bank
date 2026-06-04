@@ -3,29 +3,43 @@ import { create } from 'zustand';
 import type {
   AppData,
   AppSettings,
+  JournalEntry,
+  LogTaskOptions,
   Task,
   TaskCategory,
   Transaction,
   Wish,
 } from '../types';
 import { localDateString } from '../lib/dates';
+import {
+  clearJournalCredit,
+  DIARY_TASK_TITLE,
+  shouldCreditDiaryOnSave,
+} from '../lib/journal';
+import { normalizeSettings, rewardForTaskSize } from '../lib/settings';
 import { loadAppData, saveAppData } from '../lib/storage';
 
 type PersistableState = Pick<
   AppData,
-  'tasks' | 'wishes' | 'transactions' | 'settings'
+  'tasks' | 'wishes' | 'transactions' | 'journalEntries' | 'settings'
 >;
 
 interface AppStore extends PersistableState {
   _hydrated: boolean;
   hydrate: () => Promise<void>;
+  updateSettings: (patch: Partial<AppSettings>) => void;
   logCompletedTask: (
     title: string,
     category?: TaskCategory,
     date?: string,
-  ) => void;
+    options?: LogTaskOptions,
+  ) => Task | null;
   completeTask: (taskId: string) => void;
-  revokeTask: (taskId: string) => void;
+  deleteTask: (taskId: string) => void;
+  saveJournalContent: (
+    dateKey: string,
+    content: string,
+  ) => { entry: JournalEntry; creditedAmount: number | null };
   addWish: (input: Pick<Wish, 'title' | 'cost'>) => void;
   updateWish: (
     wishId: string,
@@ -38,19 +52,32 @@ interface AppStore extends PersistableState {
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
+function persistPayload(state: PersistableState): AppData {
+  return {
+    version: 1,
+    tasks: state.tasks,
+    wishes: state.wishes,
+    transactions: state.transactions,
+    journalEntries: state.journalEntries,
+    settings: state.settings,
+  };
+}
+
 function schedulePersist(state: PersistableState): void {
   if (persistTimer !== null) {
     clearTimeout(persistTimer);
   }
   persistTimer = setTimeout(() => {
-    void saveAppData({
-      version: 1,
-      tasks: state.tasks,
-      wishes: state.wishes,
-      transactions: state.transactions,
-      settings: state.settings,
-    });
+    void saveAppData(persistPayload(state));
   }, 300);
+}
+
+function persistNow(state: PersistableState): void {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  void saveAppData(persistPayload(state));
 }
 
 function toPersistable(state: AppStore): PersistableState {
@@ -58,14 +85,23 @@ function toPersistable(state: AppStore): PersistableState {
     tasks: state.tasks,
     wishes: state.wishes,
     transactions: state.transactions,
+    journalEntries: state.journalEntries,
     settings: state.settings,
   };
 }
 
-const initialSettings: AppSettings = {
-  defaultTaskReward: 10,
-  pinnedWishId: null,
-};
+function resolveReward(
+  settings: AppSettings,
+  options?: LogTaskOptions,
+): number {
+  if (options?.rewardAmount != null) {
+    return options.rewardAmount;
+  }
+  if (options?.taskSize != null) {
+    return rewardForTaskSize(settings, options.taskSize);
+  }
+  return settings.smallTaskReward;
+}
 
 function settingsWithoutPinned(
   settings: AppSettings,
@@ -105,11 +141,46 @@ function completeTaskInState(
   };
 }
 
+function createCompletedTask(
+  state: AppStore,
+  title: string,
+  category: TaskCategory,
+  scheduledDate: string,
+  reward: number,
+  now: string,
+): AppStore {
+  const task: Task = {
+    id: uuidv4(),
+    title,
+    category,
+    reward,
+    scheduledDate,
+    completedAt: now,
+    createdAt: now,
+  };
+
+  const transaction: Transaction = {
+    id: uuidv4(),
+    type: 'task_complete',
+    amount: reward,
+    taskId: task.id,
+    createdAt: now,
+    note: title,
+  };
+
+  return {
+    ...state,
+    tasks: [task, ...state.tasks],
+    transactions: [...state.transactions, transaction],
+  };
+}
+
 export const useAppStore = create<AppStore>((set) => ({
   tasks: [],
   wishes: [],
   transactions: [],
-  settings: initialSettings,
+  journalEntries: [],
+  settings: normalizeSettings(undefined),
   _hydrated: false,
 
   hydrate: async () => {
@@ -118,39 +189,65 @@ export const useAppStore = create<AppStore>((set) => ({
       tasks: data.tasks,
       wishes: data.wishes,
       transactions: data.transactions,
+      journalEntries: data.journalEntries,
       settings: data.settings,
       _hydrated: true,
     });
   },
 
-  logCompletedTask: (title, category = 'other', date) => {
+  updateSettings: (patch) => {
+    set((state) => {
+      const nextSettings = normalizeSettings({
+        ...state.settings,
+        ...patch,
+      });
+      const next: AppStore = { ...state, settings: nextSettings };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  logCompletedTask: (title, category = 'other', date, options) => {
     const trimmed = title.trim();
     if (!trimmed) {
-      return;
+      return null;
     }
     const now = new Date().toISOString();
     const scheduledDate = date ?? localDateString();
+    let createdTask: Task | null = null;
+
     set((state) => {
+      const reward = resolveReward(state.settings, options);
+      const taskTitle = trimmed.slice(0, 200);
+      const taskId = uuidv4();
       const task: Task = {
-        id: uuidv4(),
-        title: trimmed.slice(0, 200),
+        id: taskId,
+        title: taskTitle,
         category,
-        reward: state.settings.defaultTaskReward,
+        reward,
         scheduledDate,
-        completedAt: null,
+        completedAt: now,
         createdAt: now,
       };
-      const withTask: AppStore = {
+      const transaction: Transaction = {
+        id: uuidv4(),
+        type: 'task_complete',
+        amount: reward,
+        taskId: task.id,
+        createdAt: now,
+        note: taskTitle,
+      };
+      createdTask = task;
+      const next: AppStore = {
         ...state,
         tasks: [task, ...state.tasks],
+        transactions: [...state.transactions, transaction],
       };
-      const completed = completeTaskInState(withTask, task.id, now);
-      if (!completed) {
-        return state;
-      }
-      schedulePersist(toPersistable(completed));
-      return completed;
+      schedulePersist(toPersistable(next));
+      return next;
     });
+
+    return createdTask;
   },
 
   completeTask: (taskId) => {
@@ -165,33 +262,125 @@ export const useAppStore = create<AppStore>((set) => ({
     });
   },
 
-  revokeTask: (taskId) => {
+  deleteTask: (taskId) => {
     const now = new Date().toISOString();
     set((state) => {
       const task = state.tasks.find((t) => t.id === taskId);
-      if (!task || task.completedAt === null) {
+      if (!task) {
         return state;
       }
 
-      const transaction: Transaction = {
-        id: uuidv4(),
-        type: 'task_revoke',
-        amount: -task.reward,
-        taskId: task.id,
-        createdAt: now,
-        note: task.title,
-      };
+      const wasCredited = task.completedAt !== null;
+      const transactions = wasCredited
+        ? [
+            ...state.transactions,
+            {
+              id: uuidv4(),
+              type: 'task_revoke' as const,
+              amount: -task.reward,
+              taskId: task.id,
+              createdAt: now,
+              note: task.title,
+            },
+          ]
+        : state.transactions;
 
       const next: AppStore = {
         ...state,
-        tasks: state.tasks.map((t) =>
-          t.id === taskId ? { ...t, completedAt: null } : t,
+        tasks: state.tasks.filter((t) => t.id !== taskId),
+        transactions,
+        journalEntries: state.journalEntries.map((j) =>
+          j.creditedTaskId === taskId ? clearJournalCredit(j) : j,
         ),
-        transactions: [...state.transactions, transaction],
       };
+      persistNow(toPersistable(next));
+      return next;
+    });
+  },
+
+  saveJournalContent: (dateKey, content) => {
+    const now = new Date().toISOString();
+    let result: { entry: JournalEntry; creditedAmount: number | null } = {
+      entry: {
+        id: '',
+        date: dateKey,
+        content,
+        createdAt: now,
+        updatedAt: now,
+      },
+      creditedAmount: null,
+    };
+
+    set((state) => {
+      const existing = state.journalEntries.find((e) => e.date === dateKey);
+      const entry: JournalEntry = existing
+        ? {
+            ...existing,
+            content,
+            updatedAt: now,
+          }
+        : {
+            id: uuidv4(),
+            date: dateKey,
+            content,
+            createdAt: now,
+            updatedAt: now,
+          };
+
+      let next: AppStore = {
+        ...state,
+        journalEntries: existing
+          ? state.journalEntries.map((e) =>
+              e.date === dateKey ? entry : e,
+            )
+          : [...state.journalEntries, entry],
+      };
+
+      let creditedAmount: number | null = null;
+
+      if (
+        shouldCreditDiaryOnSave(
+          content,
+          state.settings.diaryCountsAsTask,
+          entry,
+          next.tasks,
+        )
+      ) {
+        const reward = state.settings.smallTaskReward;
+        const credited = createCompletedTask(
+          next,
+          DIARY_TASK_TITLE,
+          'life',
+          dateKey,
+          reward,
+          now,
+        );
+        const newTask = credited.tasks[0];
+        if (newTask) {
+          const entryWithCredit: JournalEntry = {
+            ...entry,
+            creditedTaskId: newTask.id,
+          };
+          next = {
+            ...credited,
+            journalEntries: next.journalEntries.map((e) =>
+              e.date === dateKey ? entryWithCredit : e,
+            ),
+          };
+          creditedAmount = reward;
+          result = { entry: entryWithCredit, creditedAmount };
+        } else {
+          result = { entry, creditedAmount: null };
+        }
+      } else {
+        result = { entry, creditedAmount: null };
+      }
+
       schedulePersist(toPersistable(next));
       return next;
     });
+
+    return result;
   },
 
   addWish: (input) => {

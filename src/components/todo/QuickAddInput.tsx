@@ -1,11 +1,8 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import {
-  burstOriginFromElement,
-  useReward,
-} from '@/context/RewardContext';
-import type { TaskCategory } from '@/types';
+import { useReward } from '@/context/RewardContext';
+import type { TaskCategory, TaskSize } from '@/types';
 import {
   formatTitleWithCategoryPrefix,
   stripCategoryPrefix,
@@ -15,6 +12,8 @@ import {
   formatPinnedGoalNarrative,
   isPinnedWishActive,
 } from '@/lib/pinnedWish';
+import { rewardForTaskSize } from '@/lib/settings';
+import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -26,15 +25,21 @@ const QUICK_CATEGORIES: { id: TaskCategory; label: string }[] = [
   { id: 'study', label: '學習' },
 ];
 
-export function QuickAddInput() {
+interface QuickAddInputProps {
+  scheduledDate: string;
+}
+
+export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<TaskCategory>('other');
-  const formRef = useRef<HTMLFormElement>(null);
+  const [taskSize, setTaskSize] = useState<TaskSize>('small');
   const logCompletedTask = useAppStore((s) => s.logCompletedTask);
-  const defaultReward = useAppStore((s) => s.settings.defaultTaskReward);
+  const settings = useAppStore((s) => s.settings);
   const wishes = useAppStore((s) => s.wishes);
   const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
-  const { triggerReward, showToast } = useReward();
+  const { showToast } = useReward();
+
+  const reward = rewardForTaskSize(settings, taskSize);
 
   const selectCategory = (id: TaskCategory) => {
     setCategory(id);
@@ -42,13 +47,16 @@ export function QuickAddInput() {
   };
 
   const submit = () => {
+    unlockAudioFromGesture();
     const trimmed = stripCategoryPrefix(title.trim());
     if (!trimmed) {
       return;
     }
-    logCompletedTask(trimmed, category);
-    const origin = burstOriginFromElement(formRef.current);
-    triggerReward(defaultReward, origin);
+    logCompletedTask(trimmed, category, scheduledDate, { taskSize });
+
+    if (settings.soundEnabled) {
+      playDepositChime();
+    }
 
     let detail: string | undefined;
     if (isPinnedWishActive(wishes, pinnedWishId)) {
@@ -61,7 +69,7 @@ export function QuickAddInput() {
       }
     }
 
-    showToast(`+NT$${defaultReward} 已入帳`, 'success', detail);
+    showToast(`+NT$${reward} 已入帳`, 'success', detail);
     setTitle('');
     setCategory('other');
   };
@@ -79,7 +87,38 @@ export function QuickAddInput() {
   };
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-3">
+    <form onSubmit={onSubmit} className="flex flex-col gap-3">
+      <div className="flex gap-2" role="group" aria-label="任務大小">
+        {(
+          [
+            { id: 'small' as const, label: '小任務' },
+            { id: 'big' as const, label: '大任務' },
+          ] as const
+        ).map(({ id, label }) => {
+          const selected = taskSize === id;
+          const amount = rewardForTaskSize(settings, id);
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTaskSize(id)}
+              className={cn(
+                'min-h-10 flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors active:scale-95',
+                selected
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-card text-muted-foreground',
+              )}
+              aria-pressed={selected}
+            >
+              {label}
+              <span className="mt-0.5 block text-[10px] opacity-80">
+                +{amount} 元
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex flex-wrap gap-2" role="group" aria-label="任務分類">
         {QUICK_CATEGORIES.map(({ id, label }) => {
           const selected = category === id;
@@ -106,9 +145,9 @@ export function QuickAddInput() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="輸入今天完成的事，按 Enter 入帳"
+          placeholder="輸入完成的事，按 Enter 入帳"
           maxLength={200}
-          aria-label="新增今日成就"
+          aria-label="新增成就"
           className="min-h-11 flex-1"
         />
         <Button

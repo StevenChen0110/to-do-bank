@@ -1,56 +1,40 @@
-import { animate, motion, useAnimation } from 'framer-motion';
+import { animate } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatCurrencyCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 interface AnimatedCounterProps {
   value: number;
   className?: string;
+  /** compact：NT$120（無空格，供 HUD） */
+  variant?: 'default' | 'compact';
 }
 
-export function AnimatedCounter({ value, className }: AnimatedCounterProps) {
+/** Subtle count-up when balance changes; no shake or particle effects. */
+export function AnimatedCounter({
+  value,
+  className,
+  variant = 'default',
+}: AnimatedCounterProps) {
+  const format =
+    variant === 'compact' ? formatCurrencyCompact : formatCurrency;
   const [display, setDisplay] = useState(value);
   const prevValue = useRef(value);
-  const controls = useAnimation();
-  const [flashDebit, setFlashDebit] = useState(false);
 
   useEffect(() => {
-    const isDebit = value < prevValue.current;
+    const from = prevValue.current;
     prevValue.current = value;
-
-    const motionControls = animate(display, value, {
-      duration: isDebit ? 0.45 : 0.65,
-      ease: isDebit ? 'easeInOut' : 'easeOut',
+    const motionControls = animate(from, value, {
+      duration: value >= from ? 0.5 : 0.35,
+      ease: 'easeOut',
       onUpdate: (v) => setDisplay(v),
     });
-
-    if (isDebit) {
-      void controls.start({
-        x: [0, -4, 4, -3, 3, 0],
-        transition: { duration: 0.4 },
-      });
-      setFlashDebit(true);
-      const flashTimer = window.setTimeout(() => setFlashDebit(false), 500);
-      return () => {
-        motionControls.stop();
-        window.clearTimeout(flashTimer);
-      };
-    }
-
     return () => motionControls.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- animate from last displayed value
-  }, [value, controls]);
+  }, [value]);
 
   return (
-    <motion.span
-      animate={controls}
-      className={cn(
-        className,
-        'inline-block transition-colors duration-300',
-        flashDebit && 'text-destructive',
-      )}
-    >
-      {formatCurrency(Math.round(display))}
-    </motion.span>
+    <span className={cn(className, 'tabular-nums')}>
+      {format(Math.round(display))}
+    </span>
   );
 }
