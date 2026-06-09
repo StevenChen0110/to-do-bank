@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 export type AppTab = 'dashboard' | 'todo' | 'wishes' | 'settings';
 
-const TABS: {
+export const TABS: {
   id: AppTab;
   label: string;
   icon: typeof LayoutDashboard;
@@ -22,7 +22,7 @@ interface TabNavProps {
 export function TabNav({ active, onChange }: TabNavProps) {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 lg:hidden"
       aria-label="主要導覽"
     >
       <div className="mx-auto flex max-w-md items-stretch justify-around px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
