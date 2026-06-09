@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react';
+import { Circle, CheckCircle2, Trash2 } from 'lucide-react';
 import type { Task } from '@/types';
 import { formatCurrency } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -15,13 +15,28 @@ const CATEGORY_LABELS: Record<Task['category'], string> = {
 interface TaskItemProps {
   task: Task;
   onDelete: (taskId: string) => void;
+  onComplete?: (taskId: string) => void;
 }
 
-export function TaskItem({ task, onDelete }: TaskItemProps) {
+export function TaskItem({ task, onDelete, onComplete }: TaskItemProps) {
   const completed = task.completedAt !== null;
 
   return (
-    <li className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-3">
+    <li className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-3">
+      <button
+        type="button"
+        onClick={() => !completed && onComplete?.(task.id)}
+        disabled={completed}
+        aria-label={completed ? '已完成' : `完成 ${task.title}`}
+        className="shrink-0 text-primary disabled:cursor-default"
+      >
+        {completed ? (
+          <CheckCircle2 className="h-5 w-5" />
+        ) : (
+          <Circle className="h-5 w-5 text-muted-foreground transition-colors hover:text-primary" />
+        )}
+      </button>
+
       <div className="min-w-0 flex-1">
         <p
           className={`truncate text-sm font-medium ${completed ? 'text-muted-foreground line-through' : ''}`}
@@ -30,13 +45,18 @@ export function TaskItem({ task, onDelete }: TaskItemProps) {
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <Badge variant="muted">{CATEGORY_LABELS[task.category]}</Badge>
-          {completed && (
+          {completed ? (
             <span className="text-xs font-medium text-primary">
               +{formatCurrency(task.reward)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              +{formatCurrency(task.reward)} 待入帳
             </span>
           )}
         </div>
       </div>
+
       <Button
         type="button"
         variant="ghost"

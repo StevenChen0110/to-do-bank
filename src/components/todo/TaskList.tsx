@@ -4,20 +4,20 @@ import { TaskItem } from './TaskItem';
 interface TaskListProps {
   tasks: Task[];
   onDelete: (taskId: string) => void;
+  onComplete?: (taskId: string) => void;
   emptyMessage?: string;
 }
 
 export function TaskList({
   tasks,
   onDelete,
-  emptyMessage = '今日尚無記錄。在上方輸入完成事項開始累積吧。',
+  onComplete,
+  emptyMessage = '今日尚無記錄。在上方輸入待辦事項開始累積吧。',
 }: TaskListProps) {
   const sorted = [...tasks].sort((a, b) => {
     const aDone = a.completedAt ? 1 : 0;
     const bDone = b.completedAt ? 1 : 0;
-    if (aDone !== bDone) {
-      return bDone - aDone;
-    }
+    if (aDone !== bDone) return aDone - bDone; // pending first
     return (b.completedAt ?? b.createdAt).localeCompare(
       a.completedAt ?? a.createdAt,
     );
@@ -34,7 +34,12 @@ export function TaskList({
   return (
     <ul className="space-y-2">
       {sorted.map((task) => (
-        <TaskItem key={task.id} task={task} onDelete={onDelete} />
+        <TaskItem
+          key={task.id}
+          task={task}
+          onDelete={onDelete}
+          onComplete={onComplete}
+        />
       ))}
     </ul>
   );

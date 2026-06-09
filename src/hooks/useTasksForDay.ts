@@ -8,8 +8,6 @@ export function useTasksForDay(dayKey: string) {
 
   return useMemo(() => {
     const day = parse(dayKey, 'yyyy-MM-dd', new Date());
-    return tasks.filter(
-      (task) => task.completedAt !== null && isTaskOnLocalDay(task, day),
-    );
+    return tasks.filter((task) => isTaskOnLocalDay(task, day));
   }, [tasks, dayKey]);
 }

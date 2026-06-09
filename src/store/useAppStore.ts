@@ -28,6 +28,12 @@ interface AppStore extends PersistableState {
   _hydrated: boolean;
   hydrate: () => Promise<void>;
   updateSettings: (patch: Partial<AppSettings>) => void;
+  addPendingTask: (
+    title: string,
+    category?: TaskCategory,
+    date?: string,
+    options?: LogTaskOptions,
+  ) => Task | null;
   logCompletedTask: (
     title: string,
     category?: TaskCategory,
@@ -205,6 +211,33 @@ export const useAppStore = create<AppStore>((set) => ({
       schedulePersist(toPersistable(next));
       return next;
     });
+  },
+
+  addPendingTask: (title, category = 'other', date, options) => {
+    const trimmed = title.trim();
+    if (!trimmed) return null;
+    const now = new Date().toISOString();
+    const scheduledDate = date ?? localDateString();
+    let createdTask: Task | null = null;
+
+    set((state) => {
+      const reward = resolveReward(state.settings, options);
+      const task: Task = {
+        id: uuidv4(),
+        title: trimmed.slice(0, 200),
+        category,
+        reward,
+        scheduledDate,
+        completedAt: null,
+        createdAt: now,
+      };
+      createdTask = task;
+      const next: AppStore = { ...state, tasks: [task, ...state.tasks] };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+
+    return createdTask;
   },
 
   logCompletedTask: (title, category = 'other', date, options) => {

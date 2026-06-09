@@ -29,7 +29,7 @@ function normalizeWish(raw: LegacyWish): Wish {
 }
 
 function sanitizeLoadedData(data: AppData): AppData {
-  const tasks = (data.tasks ?? []).filter((task) => task.completedAt !== null);
+  const tasks = data.tasks ?? [];
   const taskIds = new Set(tasks.map((task) => task.id));
 
   const journalEntries = (data.journalEntries ?? []).map((entry) => {

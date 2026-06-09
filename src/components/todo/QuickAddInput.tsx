@@ -13,6 +13,7 @@ import {
   isPinnedWishActive,
 } from '@/lib/pinnedWish';
 import { rewardForTaskSize } from '@/lib/settings';
+import { localDateString } from '@/lib/dates';
 import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -33,12 +34,14 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<TaskCategory>('other');
   const [taskSize, setTaskSize] = useState<TaskSize>('small');
+  const addPendingTask = useAppStore((s) => s.addPendingTask);
   const logCompletedTask = useAppStore((s) => s.logCompletedTask);
   const settings = useAppStore((s) => s.settings);
   const wishes = useAppStore((s) => s.wishes);
   const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
   const { showToast } = useReward();
 
+  const isToday = scheduledDate === localDateString();
   const reward = rewardForTaskSize(settings, taskSize);
 
   const selectCategory = (id: TaskCategory) => {
@@ -49,27 +52,29 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
   const submit = () => {
     unlockAudioFromGesture();
     const trimmed = stripCategoryPrefix(title.trim());
-    if (!trimmed) {
-      return;
-    }
-    logCompletedTask(trimmed, category, scheduledDate, { taskSize });
+    if (!trimmed) return;
 
-    if (settings.soundEnabled) {
-      playDepositChime();
-    }
+    if (isToday) {
+      addPendingTask(trimmed, category, scheduledDate, { taskSize });
+      showToast('已新增待辦', 'success', `打勾後 +NT$${reward} 入帳`);
+    } else {
+      logCompletedTask(trimmed, category, scheduledDate, { taskSize });
 
-    let detail: string | undefined;
-    if (isPinnedWishActive(wishes, pinnedWishId)) {
-      const pinned = wishes.find((w) => w.id === pinnedWishId);
-      if (pinned) {
-        const balanceAfter = getCurrentBalance(
-          useAppStore.getState().transactions,
-        );
-        detail = formatPinnedGoalNarrative(pinned, balanceAfter);
+      if (settings.soundEnabled) playDepositChime();
+
+      let detail: string | undefined;
+      if (isPinnedWishActive(wishes, pinnedWishId)) {
+        const pinned = wishes.find((w) => w.id === pinnedWishId);
+        if (pinned) {
+          const balanceAfter = getCurrentBalance(
+            useAppStore.getState().transactions,
+          );
+          detail = formatPinnedGoalNarrative(pinned, balanceAfter);
+        }
       }
+      showToast(`+NT$${reward} 已入帳`, 'success', detail);
     }
 
-    showToast(`+NT$${reward} 已入帳`, 'success', detail);
     setTitle('');
     setCategory('other');
   };
@@ -140,21 +145,22 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
           );
         })}
       </div>
+
       <div className="flex gap-2">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="輸入完成的事，按 Enter 入帳"
+          placeholder={isToday ? '輸入待辦事項，按 Enter 新增' : '輸入完成的事，按 Enter 入帳'}
           maxLength={200}
-          aria-label="新增成就"
+          aria-label="新增事項"
           className="min-h-11 flex-1"
         />
         <Button
           type="submit"
           size="icon"
           className="h-11 w-11 shrink-0"
-          aria-label="完成並入帳"
+          aria-label={isToday ? '新增待辦' : '完成並入帳'}
         >
           <Plus className="h-4 w-4" />
         </Button>
