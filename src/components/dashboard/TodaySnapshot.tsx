@@ -21,7 +21,7 @@ export function TodaySnapshot({ tasks, dailyEarned }: TodaySnapshotProps) {
 
       {isEmpty ? (
         <p className="mt-3 text-sm text-muted-foreground">
-          還沒有記錄。到「待辦回顧」輸入事項，打勾完成後自動入帳。
+          還沒有存款。到「存款明細」新增事項，打勾完成後自動入帳。
         </p>
       ) : (
         <ul className="mt-3 space-y-2">
