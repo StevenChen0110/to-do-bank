@@ -121,21 +121,21 @@ export function TodoLogPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* ── 新增存款 ──────────────────────────────── */}
-      <section className="rounded-xl border border-border bg-card p-4">
+      <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
         <button
           type="button"
           className="flex w-full items-center justify-between"
           onClick={() => setQuickAddOpen((v) => !v)}
           aria-expanded={quickAddOpen}
         >
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            <Plus className="h-4 w-4 text-primary" />
+          <span className="flex items-center gap-2 text-sm font-semibold text-primary">
+            <Plus className="h-4 w-4" />
             新增存款
           </span>
           {quickAddOpen ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            <ChevronUp className="h-4 w-4 text-primary/60" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 text-primary/60" />
           )}
         </button>
 
@@ -156,7 +156,13 @@ export function TodoLogPage() {
         )}
       </section>
 
-      {/* ── 篩選 ──────────────────────────────────── */}
+      {/* ── 存款明細 ──────────────────────────────── */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-semibold">存款明細</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      {/* 篩選 */}
       <section className="flex flex-col gap-3">
         {/* 日期範圍 */}
         <div className="flex items-center gap-2">
