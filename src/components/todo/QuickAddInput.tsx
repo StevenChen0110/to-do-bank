@@ -80,7 +80,7 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
       e.preventDefault();
       submit();
     }
@@ -151,7 +151,7 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={isToday ? '輸入待辦事項，按 Enter 新增' : '輸入完成的事，按 Enter 入帳'}
+          placeholder={isToday ? '輸入待辦事項' : '輸入完成的事'}
           maxLength={200}
           aria-label="新增事項"
           className="min-h-11 flex-1"
