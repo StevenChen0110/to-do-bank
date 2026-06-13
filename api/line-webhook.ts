@@ -236,28 +236,66 @@ async function handle(userId: string, text: string): Promise<string> {
 
 // ── Vercel handler ───────────────────────────────────────────────
 
+// LINE signature must be verified over the RAW request bytes, so we
+// disable Vercel's automatic JSON body parser and read the stream.
+export const config = { api: { bodyParser: false } };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function readRawBody(req: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') { res.status(405).end(); return; }
 
+  if (!CHANNEL_SECRET || !CHANNEL_ACCESS_TOKEN) {
+    console.error('Missing LINE env vars', {
+      hasSecret: !!CHANNEL_SECRET,
+      hasToken: !!CHANNEL_ACCESS_TOKEN,
+    });
+    res.status(500).json({ error: 'server not configured' });
+    return;
+  }
+
   const signature = req.headers['x-line-signature'] as string | undefined;
   if (!signature) { res.status(401).end(); return; }
 
-  const body = JSON.stringify(req.body);
-  const hmac = createHmac('sha256', CHANNEL_SECRET).update(body).digest('base64');
+  const raw = await readRawBody(req);
+  const hmac = createHmac('sha256', CHANNEL_SECRET).update(raw).digest('base64');
 
+  const sigBuf = Buffer.from(signature);
+  const hmacBuf = Buffer.from(hmac);
+  if (
+    sigBuf.length !== hmacBuf.length ||
+    !timingSafeEqual(sigBuf, hmacBuf)
+  ) {
+    res.status(401).end();
+    return;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let payload: any;
   try {
-    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(hmac))) {
-      res.status(401).end(); return;
-    }
-  } catch { res.status(401).end(); return; }
+    payload = JSON.parse(raw.toString('utf8'));
+  } catch {
+    res.status(400).end();
+    return;
+  }
 
-  const events: any[] = req.body?.events ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const events: any[] = payload?.events ?? [];
   await Promise.all(
     events
       .filter(e => e.type === 'message' && e.message?.type === 'text')
       .map(e => handle(e.source.userId, e.message.text)
-        .then(text => reply(e.replyToken, text))),
+        .then(text => reply(e.replyToken, text))
+        .catch(err => console.error('handle error', err))),
   );
 
   res.status(200).json({ ok: true });
