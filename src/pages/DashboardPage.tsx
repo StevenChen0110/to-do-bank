@@ -24,7 +24,7 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <BalanceHero balance={balance} totalEarned={totalEarned} />
+      <BalanceHero balance={balance} totalEarned={totalEarned} wish={dashboardWish} />
       <TodaySnapshot tasks={todayTasks} dailyEarned={dailyEarned} />
       <NearestWishCard
         wish={dashboardWish}
