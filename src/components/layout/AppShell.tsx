@@ -84,7 +84,7 @@ function AppShellInner() {
         {/* Main content */}
         <main className="min-w-0 flex-1 px-4 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:px-6 lg:py-6 lg:pb-10">
           <div className="mx-auto max-w-2xl">
-            {tab === 'dashboard' && <DashboardPage />}
+            {tab === 'dashboard' && <DashboardPage onNavigate={setTab} />}
             {tab === 'todo' && <TodoLogPage />}
             {tab === 'wishes' && <WishlistPage />}
             {tab === 'settings' && <SettingsPage />}

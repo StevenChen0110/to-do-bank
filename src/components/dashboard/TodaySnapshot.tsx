@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, ListTodo } from 'lucide-react';
+import { CheckCircle2, Circle, ClipboardList, ListTodo } from 'lucide-react';
 import type { Task } from '@/types';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -6,9 +6,11 @@ import { cn } from '@/lib/utils';
 interface TodaySnapshotProps {
   tasks: Task[];
   dailyEarned: number;
+  onComplete: (taskId: string) => void;
+  onNavigate: () => void;
 }
 
-export function TodaySnapshot({ tasks, dailyEarned }: TodaySnapshotProps) {
+export function TodaySnapshot({ tasks, dailyEarned, onComplete, onNavigate }: TodaySnapshotProps) {
   const pending = tasks.filter((t) => t.completedAt === null);
   const completed = tasks.filter((t) => t.completedAt !== null);
   const total = tasks.length;
@@ -23,12 +25,23 @@ export function TodaySnapshot({ tasks, dailyEarned }: TodaySnapshotProps) {
           <ListTodo className="h-4 w-4 text-primary" />
           今日代辦
         </h2>
-        {total > 0 && (
-          <span className="text-xs text-muted-foreground">
-            <span className="font-semibold text-primary">{completedCount}</span>
-            {' / '}{total} 完成
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {total > 0 && (
+            <span className="text-xs text-muted-foreground">
+              <span className="font-semibold text-primary">{completedCount}</span>
+              {' / '}{total} 完成
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onNavigate}
+            className="flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary active:scale-95"
+            aria-label="前往規劃今日代辦"
+          >
+            <ClipboardList className="h-3 w-3" />
+            規劃
+          </button>
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -44,32 +57,49 @@ export function TodaySnapshot({ tasks, dailyEarned }: TodaySnapshotProps) {
       {/* Task list */}
       <div className="px-4">
         {total === 0 ? (
-          <p className="pb-4 text-sm text-muted-foreground">
-            還沒有代辦。到「存款明細」新增事項，打勾完成後自動入帳。
-          </p>
+          <div className="flex flex-col items-center gap-3 pb-4 pt-1 text-center">
+            <p className="text-sm text-muted-foreground">
+              今天還沒有代辦。點「規劃」新增任務，打勾完成後自動入帳。
+            </p>
+            <button
+              type="button"
+              onClick={onNavigate}
+              className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 active:scale-95"
+            >
+              <ClipboardList className="h-3.5 w-3.5" />
+              開始規劃今日代辦
+            </button>
+          </div>
         ) : (
-          <ul className="space-y-2">
-            {/* Pending first */}
+          <ul className="space-y-1.5">
+            {/* Pending — tappable */}
             {pending.map((task) => (
-              <li key={task.id} className="flex items-start gap-2 text-sm">
-                <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="flex-1 text-foreground">{task.title}</span>
+              <li key={task.id} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onComplete(task.id)}
+                  aria-label={`完成 ${task.title}`}
+                  className="shrink-0 text-muted-foreground transition-colors hover:text-primary active:scale-90"
+                >
+                  <Circle className="h-4 w-4" />
+                </button>
+                <span className="flex-1 truncate text-sm">{task.title}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   +{formatCurrency(task.reward)}
                 </span>
               </li>
             ))}
-            {/* Completed below with divider */}
-            {completed.length > 0 && pending.length > 0 && (
-              <li aria-hidden className="border-t border-border pt-1" />
+
+            {/* Divider between pending / completed */}
+            {pending.length > 0 && completed.length > 0 && (
+              <li aria-hidden className="border-t border-border pt-0.5" />
             )}
+
+            {/* Completed */}
             {completed.map((task) => (
-              <li
-                key={task.id}
-                className={cn('flex items-start gap-2 text-sm', completed.length > 0 && pending.length === 0 ? '' : '')}
-              >
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span className="flex-1 text-muted-foreground line-through">
+              <li key={task.id} className="flex items-center gap-2">
+                <CheckCircle2 className={cn('h-4 w-4 shrink-0 text-primary')} />
+                <span className="flex-1 truncate text-sm text-muted-foreground line-through">
                   {task.title}
                 </span>
                 <span className="shrink-0 text-xs font-medium text-primary">
