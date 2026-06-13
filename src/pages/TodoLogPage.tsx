@@ -15,6 +15,8 @@ import { TaskList } from '@/components/todo/TaskList';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
+type FilterStatus = 'all' | 'pending' | 'completed';
+
 const CATEGORY_LABELS: Record<TaskCategory, string> = {
   work: '工作',
   study: '學習',
@@ -23,7 +25,7 @@ const CATEGORY_LABELS: Record<TaskCategory, string> = {
   other: '其他',
 };
 
-const FILTER_OPTIONS: { id: 'all' | TaskCategory; label: string }[] = [
+const CATEGORY_OPTIONS: { id: 'all' | TaskCategory; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'work', label: '工作' },
   { id: 'study', label: '學習' },
@@ -32,12 +34,20 @@ const FILTER_OPTIONS: { id: 'all' | TaskCategory; label: string }[] = [
   { id: 'other', label: '其他' },
 ];
 
+const STATUS_OPTIONS: { id: Exclude<FilterStatus, 'all'>; label: string }[] = [
+  { id: 'pending', label: '未完成' },
+  { id: 'completed', label: '已完成' },
+];
+
 export function TodoLogPage() {
   const todayKey = localDateString();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddDate, setQuickAddDate] = useState(todayKey);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterCat, setFilterCat] = useState<'all' | TaskCategory>('all');
   const [viewMode, setViewMode] = useState<'date' | 'category'>('date');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const tasks = useAppStore((s) => s.tasks);
   const deleteTask = useAppStore((s) => s.deleteTask);
@@ -58,9 +68,7 @@ export function TodoLogPage() {
     if (isPinnedWishActive(wishes, pinnedWishId)) {
       const pinned = wishes.find((w) => w.id === pinnedWishId);
       if (pinned) {
-        const bal = useAppStore
-          .getState()
-          .transactions.reduce((s, tx) => s + tx.amount, 0);
+        const bal = useAppStore.getState().transactions.reduce((s, tx) => s + tx.amount, 0);
         detail = formatPinnedGoalNarrative(pinned, bal);
       }
     }
@@ -80,8 +88,15 @@ export function TodoLogPage() {
 
   const filtered = useMemo(
     () =>
-      filterCat === 'all' ? tasks : tasks.filter((t) => t.category === filterCat),
-    [tasks, filterCat],
+      tasks.filter((t) => {
+        if (filterCat !== 'all' && t.category !== filterCat) return false;
+        if (filterStatus === 'pending' && t.completedAt !== null) return false;
+        if (filterStatus === 'completed' && t.completedAt === null) return false;
+        if (dateFrom && t.scheduledDate < dateFrom) return false;
+        if (dateTo && t.scheduledDate > dateTo) return false;
+        return true;
+      }),
+    [tasks, filterCat, filterStatus, dateFrom, dateTo],
   );
 
   const dateGroups = useMemo(() => {
@@ -104,16 +119,14 @@ export function TodoLogPage() {
 
   function labelForDate(dk: string) {
     if (dk === todayKey) return '今日';
-    return format(parse(dk, 'yyyy-MM-dd', new Date()), 'M月d日 EEEE', {
-      locale: zhTW,
-    });
+    return format(parse(dk, 'yyyy-MM-dd', new Date()), 'M月d日 EEEE', { locale: zhTW });
   }
 
   function earnedFor(group: typeof tasks) {
-    return group
-      .filter((t) => t.completedAt !== null)
-      .reduce((s, t) => s + t.reward, 0);
+    return group.filter((t) => t.completedAt !== null).reduce((s, t) => s + t.reward, 0);
   }
+
+  const hasDateFilter = dateFrom || dateTo;
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,9 +152,7 @@ export function TodoLogPage() {
         {quickAddOpen && (
           <div className="mt-3 flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <label className="shrink-0 text-xs text-muted-foreground">
-                記帳日期
-              </label>
+              <label className="shrink-0 text-xs text-muted-foreground">記帳日期</label>
               <Input
                 type="date"
                 value={quickAddDate}
@@ -156,7 +167,77 @@ export function TodoLogPage() {
       </section>
 
       {/* ── 篩選 ──────────────────────────────────── */}
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-3">
+        {/* 日期範圍 */}
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs text-muted-foreground">從</span>
+          <Input
+            type="date"
+            value={dateFrom}
+            max={dateTo || todayKey}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-8 flex-1 text-xs"
+          />
+          <span className="shrink-0 text-xs text-muted-foreground">到</span>
+          <Input
+            type="date"
+            value={dateTo}
+            min={dateFrom}
+            max={todayKey}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-8 flex-1 text-xs"
+          />
+          {hasDateFilter && (
+            <button
+              type="button"
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+            >
+              清除
+            </button>
+          )}
+        </div>
+
+        {/* 狀態 + 分類 chips */}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="篩選條件">
+          {STATUS_OPTIONS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setFilterStatus((prev) => (prev === id ? 'all' : id))}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                filterStatus === id
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
+              )}
+              aria-pressed={filterStatus === id}
+            >
+              {label}
+            </button>
+          ))}
+
+          <span className="h-4 self-center border-l border-border" aria-hidden />
+
+          {CATEGORY_OPTIONS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setFilterCat(id)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                filterCat === id
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
+              )}
+              aria-pressed={filterCat === id}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* 顯示方式 */}
         <div className="flex gap-2" role="group" aria-label="顯示方式">
           {(['date', 'category'] as const).map((mode) => (
             <button
@@ -175,41 +256,21 @@ export function TodoLogPage() {
             </button>
           ))}
         </div>
-
-        <div className="flex flex-wrap gap-2" role="group" aria-label="分類篩選">
-          {FILTER_OPTIONS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setFilterCat(id)}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                filterCat === id
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-              )}
-              aria-pressed={filterCat === id}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
       </section>
 
       {/* ── 存款明細清單 ────────────────────────────── */}
       {filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-          尚無存款記錄。點上方「新增存款」，打勾完成後自動入帳。
+          {tasks.length === 0
+            ? '尚無存款記錄。點上方「新增存款」，打勾完成後自動入帳。'
+            : '目前篩選條件下無記錄。'}
         </p>
       ) : viewMode === 'date' ? (
         <div className="flex flex-col gap-3">
           {dateGroups.map(([dk, dayTasks]) => {
             const earned = earnedFor(dayTasks);
             return (
-              <section
-                key={dk}
-                className="rounded-xl border border-border bg-card p-4"
-              >
+              <section key={dk} className="rounded-xl border border-border bg-card p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-sm font-semibold">{labelForDate(dk)}</h3>
                   {earned > 0 && (
@@ -233,16 +294,11 @@ export function TodoLogPage() {
           {categoryGroups.map(([cat, catTasks]) => {
             const earned = earnedFor(catTasks);
             return (
-              <section
-                key={cat}
-                className="rounded-xl border border-border bg-card p-4"
-              >
+              <section key={cat} className="rounded-xl border border-border bg-card p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-sm font-semibold">{CATEGORY_LABELS[cat]}</h3>
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">
-                      {catTasks.length} 筆
-                    </span>
+                    <span className="text-muted-foreground">{catTasks.length} 筆</span>
                     {earned > 0 && (
                       <span className="font-medium text-primary">
                         +{formatCurrency(earned)}
