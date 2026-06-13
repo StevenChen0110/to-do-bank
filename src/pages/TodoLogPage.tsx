@@ -8,7 +8,7 @@ import { formatPinnedGoalNarrative, isPinnedWishActive } from '@/lib/pinnedWish'
 import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
-import type { TaskCategory } from '@/types';
+import { allCategories, labelForCategory } from '@/lib/categories';
 import { QuickAddInput } from '@/components/todo/QuickAddInput';
 import { JournalSection } from '@/components/todo/JournalSection';
 import { TaskList } from '@/components/todo/TaskList';
@@ -17,22 +17,6 @@ import { cn } from '@/lib/utils';
 
 type FilterStatus = 'all' | 'pending' | 'completed';
 
-const CATEGORY_LABELS: Record<TaskCategory, string> = {
-  work: '工作',
-  study: '學習',
-  health: '運動',
-  life: '生活',
-  other: '其他',
-};
-
-const CATEGORY_OPTIONS: { id: 'all' | TaskCategory; label: string }[] = [
-  { id: 'all', label: '全部' },
-  { id: 'work', label: '工作' },
-  { id: 'study', label: '學習' },
-  { id: 'health', label: '運動' },
-  { id: 'life', label: '生活' },
-  { id: 'other', label: '其他' },
-];
 
 const STATUS_OPTIONS: { id: Exclude<FilterStatus, 'all'>; label: string }[] = [
   { id: 'pending', label: '未完成' },
@@ -44,7 +28,7 @@ export function TodoLogPage() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddDate, setQuickAddDate] = useState(todayKey);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
-  const [filterCat, setFilterCat] = useState<'all' | TaskCategory>('all');
+  const [filterCat, setFilterCat] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'date' | 'category'>('date');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -55,7 +39,13 @@ export function TodoLogPage() {
   const settings = useAppStore((s) => s.settings);
   const wishes = useAppStore((s) => s.wishes);
   const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
+  const customCategories = useAppStore((s) => s.settings.customCategories);
   const { showToast } = useReward();
+
+  const categoryOptions = useMemo(
+    () => [{ id: 'all', label: '全部' }, ...allCategories(customCategories)],
+    [customCategories],
+  );
 
   const handleComplete = (taskId: string) => {
     unlockAudioFromGesture();
@@ -109,7 +99,7 @@ export function TodoLogPage() {
   }, [filtered]);
 
   const categoryGroups = useMemo(() => {
-    const map = new Map<TaskCategory, typeof tasks>();
+    const map = new Map<string, typeof tasks>();
     for (const task of filtered) {
       if (!map.has(task.category)) map.set(task.category, []);
       map.get(task.category)!.push(task);
@@ -219,7 +209,7 @@ export function TodoLogPage() {
 
           <span className="h-4 self-center border-l border-border" aria-hidden />
 
-          {CATEGORY_OPTIONS.map(({ id, label }) => (
+          {categoryOptions.map(({ id, label }) => (
             <button
               key={id}
               type="button"
@@ -296,7 +286,7 @@ export function TodoLogPage() {
             return (
               <section key={cat} className="rounded-xl border border-border bg-card p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">{CATEGORY_LABELS[cat]}</h3>
+                  <h3 className="text-sm font-semibold">{labelForCategory(cat, customCategories)}</h3>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-muted-foreground">{catTasks.length} 筆</span>
                     {earned > 0 && (

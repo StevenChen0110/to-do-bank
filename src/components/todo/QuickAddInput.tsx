@@ -2,7 +2,8 @@ import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
-import type { TaskCategory, TaskSize } from '@/types';
+import type { TaskSize } from '@/types';
+import { allCategories } from '@/lib/categories';
 import {
   formatTitleWithCategoryPrefix,
   stripCategoryPrefix,
@@ -19,32 +20,27 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const QUICK_CATEGORIES: { id: TaskCategory; label: string }[] = [
-  { id: 'work', label: '工作' },
-  { id: 'life', label: '生活' },
-  { id: 'health', label: '運動' },
-  { id: 'study', label: '學習' },
-];
-
 interface QuickAddInputProps {
   scheduledDate: string;
 }
 
 export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<TaskCategory>('other');
+  const [category, setCategory] = useState('other');
   const [taskSize, setTaskSize] = useState<TaskSize>('small');
   const addPendingTask = useAppStore((s) => s.addPendingTask);
   const logCompletedTask = useAppStore((s) => s.logCompletedTask);
   const settings = useAppStore((s) => s.settings);
   const wishes = useAppStore((s) => s.wishes);
   const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
+  const customCategories = useAppStore((s) => s.settings.customCategories);
   const { showToast } = useReward();
 
+  const categories = allCategories(customCategories);
   const isToday = scheduledDate === localDateString();
   const reward = rewardForTaskSize(settings, taskSize);
 
-  const selectCategory = (id: TaskCategory) => {
+  const selectCategory = (id: string) => {
     setCategory(id);
     setTitle((prev) => formatTitleWithCategoryPrefix(prev, id));
   };
@@ -125,7 +121,7 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
       </div>
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="任務分類">
-        {QUICK_CATEGORIES.map(({ id, label }) => {
+        {categories.map(({ id, label }) => {
           const selected = category === id;
           return (
             <button

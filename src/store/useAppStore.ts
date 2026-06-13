@@ -54,6 +54,8 @@ interface AppStore extends PersistableState {
   deleteWish: (wishId: string) => void;
   redeemWish: (wishId: string) => void;
   setPinnedWishId: (wishId: string | null) => void;
+  addCategory: (label: string) => void;
+  deleteCategory: (id: string) => void;
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -504,6 +506,48 @@ export const useAppStore = create<AppStore>((set) => ({
       const next: AppStore = {
         ...state,
         settings: { ...state.settings, pinnedWishId: wishId },
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  addCategory: (label) => {
+    const trimmed = label.trim().slice(0, 20);
+    if (!trimmed) return;
+    set((state) => {
+      if (
+        state.settings.customCategories.some(
+          (c) => c.label === trimmed,
+        )
+      ) {
+        return state;
+      }
+      const next: AppStore = {
+        ...state,
+        settings: {
+          ...state.settings,
+          customCategories: [
+            ...state.settings.customCategories,
+            { id: uuidv4(), label: trimmed },
+          ],
+        },
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  deleteCategory: (id) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        settings: {
+          ...state.settings,
+          customCategories: state.settings.customCategories.filter(
+            (c) => c.id !== id,
+          ),
+        },
       };
       schedulePersist(toPersistable(next));
       return next;

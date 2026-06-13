@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import {
   clampReward,
@@ -6,6 +7,7 @@ import {
   REWARD_MAX,
   REWARD_MIN,
 } from '@/lib/settings';
+import { BUILTIN_CATEGORIES } from '@/lib/categories';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -13,10 +15,13 @@ import { cn } from '@/lib/utils';
 export function SettingsPage() {
   const settings = useAppStore((s) => s.settings);
   const updateSettings = useAppStore((s) => s.updateSettings);
+  const addCategory = useAppStore((s) => s.addCategory);
+  const deleteCategory = useAppStore((s) => s.deleteCategory);
 
   const [smallDraft, setSmallDraft] = useState(String(settings.smallTaskReward));
   const [bigDraft, setBigDraft] = useState(String(settings.bigTaskReward));
   const [hint, setHint] = useState<string | null>(null);
+  const [newCatLabel, setNewCatLabel] = useState('');
 
   const commitRewards = () => {
     const small = parseRewardInput(smallDraft);
@@ -37,6 +42,13 @@ export function SettingsPage() {
     setBigDraft(String(clampReward(big)));
     setHint('已儲存獎勵設定');
     window.setTimeout(() => setHint(null), 2000);
+  };
+
+  const handleAddCategory = () => {
+    const trimmed = newCatLabel.trim();
+    if (!trimmed) return;
+    addCategory(trimmed);
+    setNewCatLabel('');
   };
 
   return (
@@ -76,6 +88,67 @@ export function SettingsPage() {
         )}
       </section>
 
+      {/* ── 分類標籤 ──────────────────────────────── */}
+      <section className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold">分類標籤</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          預設分類無法刪除；自訂分類可新增與刪除。
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {BUILTIN_CATEGORIES.map(({ id, label }) => (
+            <span
+              key={id}
+              className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground"
+            >
+              {label}
+            </span>
+          ))}
+          {settings.customCategories.map(({ id, label }) => (
+            <span
+              key={id}
+              className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/5 py-1 pl-3 pr-1.5 text-xs text-primary"
+            >
+              {label}
+              <button
+                type="button"
+                onClick={() => deleteCategory(id)}
+                aria-label={`刪除分類 ${label}`}
+                className="rounded-full p-0.5 transition-colors hover:bg-primary/20"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <Input
+            value={newCatLabel}
+            onChange={(e) => setNewCatLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                handleAddCategory();
+              }
+            }}
+            placeholder="輸入新分類名稱"
+            maxLength={20}
+            className="h-9 flex-1 text-sm"
+            aria-label="新分類名稱"
+          />
+          <Button
+            type="button"
+            size="sm"
+            className={cn('h-9 shrink-0', !newCatLabel.trim() && 'opacity-50')}
+            onClick={handleAddCategory}
+            disabled={!newCatLabel.trim()}
+          >
+            新增
+          </Button>
+        </div>
+      </section>
+
       <section className="rounded-xl border border-border bg-card p-4">
         <h2 className="text-sm font-semibold">音效</h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -87,9 +160,7 @@ export function SettingsPage() {
           <input
             type="checkbox"
             checked={settings.soundEnabled}
-            onChange={(e) =>
-              updateSettings({ soundEnabled: e.target.checked })
-            }
+            onChange={(e) => updateSettings({ soundEnabled: e.target.checked })}
             className="h-5 w-5 accent-primary"
             aria-label="入帳音效開關"
           />
@@ -101,11 +172,7 @@ export function SettingsPage() {
         <p className="mt-1 text-xs text-muted-foreground">
           開啟後，在所選日期首次儲存非空日記時，會以「日記完成」入帳一次小任務獎勵（同日不重複）。
         </p>
-        <label
-          className={cn(
-            'mt-3 flex cursor-pointer items-center justify-between gap-3',
-          )}
-        >
+        <label className="mt-3 flex cursor-pointer items-center justify-between gap-3">
           <span className="text-sm">日記完成算任務</span>
           <input
             type="checkbox"

@@ -1,4 +1,4 @@
-export type TaskCategory = 'work' | 'study' | 'health' | 'life' | 'other';
+export type TaskCategory = string;
 
 export type TransactionType = 'task_complete' | 'task_revoke' | 'wish_redeem';
 
@@ -46,6 +46,11 @@ export interface JournalEntry {
   creditedTaskId?: string;
 }
 
+export interface CategoryDef {
+  id: string;
+  label: string;
+}
+
 export interface AppSettings {
   smallTaskReward: number;
   bigTaskReward: number;
@@ -53,6 +58,8 @@ export interface AppSettings {
   diaryCountsAsTask: boolean;
   /** Dashboard + deposit narrative focus wish */
   pinnedWishId: string | null;
+  /** User-defined categories appended after built-ins */
+  customCategories: CategoryDef[];
 }
 
 export interface AppData {

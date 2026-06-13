@@ -1,10 +1,4 @@
-import type { TaskCategory } from '../types';
-
-/** Labels used in quick-add `[標籤] ` prefixes (excludes `other`). */
-export const QUICK_CATEGORY_LABELS: Record<
-  Exclude<TaskCategory, 'other'>,
-  string
-> = {
+const QUICK_CATEGORY_LABELS: Record<string, string> = {
   work: '工作',
   life: '生活',
   health: '運動',
@@ -13,31 +7,21 @@ export const QUICK_CATEGORY_LABELS: Record<
 
 const PREFIX_PATTERN = /^\[(工作|生活|運動|學習)\]\s*/;
 
-export function categoryPrefixLabel(
-  category: TaskCategory,
-): string | null {
-  if (category === 'other') {
-    return null;
-  }
-  return QUICK_CATEGORY_LABELS[category];
+export function categoryPrefixLabel(category: string): string | null {
+  return QUICK_CATEGORY_LABELS[category] ?? null;
 }
 
 export function stripCategoryPrefix(title: string): string {
   return title.replace(PREFIX_PATTERN, '').trimStart();
 }
 
-/** Replace any existing quick-add prefix; never stack duplicates. */
 export function formatTitleWithCategoryPrefix(
   title: string,
-  category: TaskCategory,
+  category: string,
 ): string {
   const body = stripCategoryPrefix(title);
   const label = categoryPrefixLabel(category);
-  if (!label) {
-    return body;
-  }
-  if (!body) {
-    return `[${label}] `;
-  }
+  if (!label) return body;
+  if (!body) return `[${label}] `;
   return `[${label}] ${body}`;
 }

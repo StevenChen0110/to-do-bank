@@ -42,6 +42,7 @@ export function normalizeSettings(raw: StoredSettings | undefined): AppSettings 
     soundEnabled: raw?.soundEnabled ?? false,
     diaryCountsAsTask: raw?.diaryCountsAsTask ?? false,
     pinnedWishId: raw?.pinnedWishId ?? null,
+    customCategories: raw?.customCategories ?? [],
   };
 }
 
