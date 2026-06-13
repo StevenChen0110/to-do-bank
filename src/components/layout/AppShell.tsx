@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PiggyBank } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { useAuth, AuthProvider } from '@/context/AuthContext';
 import { RewardProvider } from '@/context/RewardContext';
 import { Toaster } from '@/components/effects/Toaster';
 import { GoalChip } from '@/components/layout/GoalChip';
@@ -12,51 +11,22 @@ import { WishlistPage } from '@/pages/WishlistPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { cn } from '@/lib/utils';
 
-function LoadingScreen({ message }: { message: string }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <PiggyBank className="h-10 w-10 animate-pulse text-primary" />
-        <p className="text-sm text-muted-foreground">{message}</p>
-      </div>
-    </div>
-  );
-}
-
-function ErrorScreen({ message }: { message: string }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6">
-      <div className="max-w-sm text-center">
-        <PiggyBank className="mx-auto h-10 w-10 text-muted-foreground" />
-        <p className="mt-4 text-sm font-medium">無法連線</p>
-        <p className="mt-1 text-xs text-muted-foreground">{message}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          重新載入
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function AppShellInner() {
   const hydrate = useAppStore((s) => s.hydrate);
   const hydrated = useAppStore((s) => s._hydrated);
-  const { userId, ready, error } = useAuth();
   const [tab, setTab] = useState<AppTab>('dashboard');
 
   useEffect(() => {
-    if (ready && userId) {
-      void hydrate();
-    }
-  }, [ready, userId, hydrate]);
+    void hydrate();
+  }, [hydrate]);
 
-  if (!ready) return <LoadingScreen message="LINE 登入中…" />;
-  if (error) return <ErrorScreen message={error} />;
-  if (!hydrated) return <LoadingScreen message="載入撲滿資料中…" />;
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        <p className="animate-pulse text-sm">載入撲滿資料中…</p>
+      </div>
+    );
+  }
 
   const showGoalChip = tab !== 'dashboard';
 
@@ -79,10 +49,7 @@ function AppShellInner() {
 
       <div className="mx-auto max-w-5xl lg:flex">
         <aside className="hidden lg:block lg:w-52 lg:shrink-0 lg:border-r lg:border-border">
-          <nav
-            className="sticky top-[73px] flex flex-col gap-1 p-3"
-            aria-label="主要導覽"
-          >
+          <nav className="sticky top-[73px] flex flex-col gap-1 p-3" aria-label="主要導覽">
             {TABS.map(({ id, label, icon: Icon }) => {
               const selected = tab === id;
               return (
@@ -124,10 +91,8 @@ function AppShellInner() {
 
 export function AppShell() {
   return (
-    <AuthProvider>
-      <RewardProvider>
-        <AppShellInner />
-      </RewardProvider>
-    </AuthProvider>
+    <RewardProvider>
+      <AppShellInner />
+    </RewardProvider>
   );
 }
