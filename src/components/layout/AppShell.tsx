@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PiggyBank } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { useAuth, AuthProvider } from '@/context/AuthContext';
 import { RewardProvider } from '@/context/RewardContext';
 import { Toaster } from '@/components/effects/Toaster';
 import { GoalChip } from '@/components/layout/GoalChip';
@@ -11,36 +12,62 @@ import { WishlistPage } from '@/pages/WishlistPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { cn } from '@/lib/utils';
 
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <PiggyBank className="h-10 w-10 animate-pulse text-primary" />
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </div>
+    </div>
+  );
+}
+
+function ErrorScreen({ message }: { message: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="max-w-sm text-center">
+        <PiggyBank className="mx-auto h-10 w-10 text-muted-foreground" />
+        <p className="mt-4 text-sm font-medium">無法連線</p>
+        <p className="mt-1 text-xs text-muted-foreground">{message}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        >
+          重新載入
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AppShellInner() {
   const hydrate = useAppStore((s) => s.hydrate);
   const hydrated = useAppStore((s) => s._hydrated);
+  const { userId, ready, error } = useAuth();
   const [tab, setTab] = useState<AppTab>('dashboard');
 
   useEffect(() => {
-    void hydrate();
-  }, [hydrate]);
+    if (ready && userId) {
+      void hydrate();
+    }
+  }, [ready, userId, hydrate]);
 
-  if (!hydrated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
-        <p className="animate-pulse text-sm">載入撲滿資料中…</p>
-      </div>
-    );
-  }
+  if (!ready) return <LoadingScreen message="LINE 登入中…" />;
+  if (error) return <ErrorScreen message={error} />;
+  if (!hydrated) return <LoadingScreen message="載入撲滿資料中…" />;
 
   const showGoalChip = tab !== 'dashboard';
 
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Header ──────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-start justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex min-w-0 shrink-0 items-start gap-2.5">
             <PiggyBank className="mt-px size-7 shrink-0 text-primary" aria-hidden />
             <div className="min-w-0 pt-px">
-              <h1 className="text-xl font-bold leading-tight tracking-tight">
-                To Do Bank
-              </h1>
+              <h1 className="text-xl font-bold leading-tight tracking-tight">To Do Bank</h1>
               <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
                 完成待辦，存進撲滿
               </p>
@@ -50,9 +77,7 @@ function AppShellInner() {
         </div>
       </header>
 
-      {/* ── Body ────────────────────────────────────────────── */}
       <div className="mx-auto max-w-5xl lg:flex">
-        {/* Sidebar — desktop only */}
         <aside className="hidden lg:block lg:w-52 lg:shrink-0 lg:border-r lg:border-border">
           <nav
             className="sticky top-[73px] flex flex-col gap-1 p-3"
@@ -81,7 +106,6 @@ function AppShellInner() {
           </nav>
         </aside>
 
-        {/* Main content */}
         <main className="min-w-0 flex-1 px-4 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:px-6 lg:py-6 lg:pb-10">
           <div className="mx-auto max-w-2xl">
             {tab === 'dashboard' && <DashboardPage onNavigate={setTab} />}
@@ -92,7 +116,6 @@ function AppShellInner() {
         </main>
       </div>
 
-      {/* Bottom nav — mobile only (lg:hidden is inside TabNav) */}
       <TabNav active={tab} onChange={setTab} />
       <Toaster />
     </div>
@@ -101,8 +124,10 @@ function AppShellInner() {
 
 export function AppShell() {
   return (
-    <RewardProvider>
-      <AppShellInner />
-    </RewardProvider>
+    <AuthProvider>
+      <RewardProvider>
+        <AppShellInner />
+      </RewardProvider>
+    </AuthProvider>
   );
 }
