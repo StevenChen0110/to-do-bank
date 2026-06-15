@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Check, LogOut, Trash2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { useAuth } from '@/context/AuthContext';
 import {
   clampReward,
   parseRewardInput,
@@ -17,11 +18,29 @@ export function SettingsPage() {
   const updateSettings = useAppStore((s) => s.updateSettings);
   const addCategory = useAppStore((s) => s.addCategory);
   const deleteCategory = useAppStore((s) => s.deleteCategory);
+  const { user, linkedLineId, linkLine, signOut } = useAuth();
 
   const [smallDraft, setSmallDraft] = useState(String(settings.smallTaskReward));
   const [bigDraft, setBigDraft] = useState(String(settings.bigTaskReward));
   const [hint, setHint] = useState<string | null>(null);
   const [newCatLabel, setNewCatLabel] = useState('');
+  const [pairCode, setPairCode] = useState('');
+  const [linkMsg, setLinkMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [linking, setLinking] = useState(false);
+
+  const handleLink = async () => {
+    if (!pairCode.trim()) return;
+    setLinking(true);
+    setLinkMsg(null);
+    const { error } = await linkLine(pairCode);
+    setLinking(false);
+    if (error) {
+      setLinkMsg({ ok: false, text: error });
+    } else {
+      setPairCode('');
+      setLinkMsg({ ok: true, text: '已連結 LINE，資料將與手機同步！' });
+    }
+  };
 
   const commitRewards = () => {
     const small = parseRewardInput(smallDraft);
@@ -184,6 +203,70 @@ export function SettingsPage() {
             aria-label="日記完成算任務"
           />
         </label>
+      </section>
+
+      {/* ── 連結 LINE ─────────────────────────────── */}
+      <section className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold">連結 LINE</h2>
+        {linkedLineId ? (
+          <div className="mt-2 flex items-center gap-2 text-sm text-primary">
+            <Check className="h-4 w-4" />
+            已連結 LINE，資料與手機 Bot 同步中
+          </div>
+        ) : (
+          <>
+            <p className="mt-1 text-xs text-muted-foreground">
+              在 LINE 跟 Bot 輸入「綁定」取得配對碼，貼到下方即可與手機同步同一份資料。
+            </p>
+            <div className="mt-3 flex gap-2">
+              <Input
+                value={pairCode}
+                onChange={(e) => setPairCode(e.target.value)}
+                placeholder="輸入配對碼，例如 A3F9K2"
+                maxLength={8}
+                className="h-9 flex-1 text-sm uppercase"
+                aria-label="LINE 配對碼"
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 shrink-0"
+                onClick={handleLink}
+                disabled={linking || !pairCode.trim()}
+              >
+                {linking ? '連結中…' : '連結'}
+              </Button>
+            </div>
+          </>
+        )}
+        {linkMsg && (
+          <p
+            className={cn(
+              'mt-2 text-xs',
+              linkMsg.ok ? 'text-primary' : 'text-red-500',
+            )}
+            role="status"
+          >
+            {linkMsg.text}
+          </p>
+        )}
+      </section>
+
+      {/* ── 帳號 ─────────────────────────────────── */}
+      <section className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold">帳號</h2>
+        <p className="mt-1 truncate text-xs text-muted-foreground">
+          {user?.email ?? '已登入'}
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          className="mt-3 w-full justify-center text-muted-foreground"
+          onClick={() => void signOut()}
+        >
+          <LogOut className="h-4 w-4" />
+          登出
+        </Button>
       </section>
 
       <p className="text-center text-xs text-muted-foreground">

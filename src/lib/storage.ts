@@ -59,8 +59,8 @@ function parseStoredData(raw: unknown): AppData {
 
 let _userId: string | null = null;
 
-export function setCurrentUser(uid: string) {
-  _userId = uid;
+export function setCurrentUser(uid: string | null) {
+  _userId = uid && uid.length > 0 ? uid : null;
 }
 
 export async function loadAppData(): Promise<AppData> {

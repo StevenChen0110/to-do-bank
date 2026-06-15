@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { PiggyBank } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { RewardProvider } from '@/context/RewardContext';
+import { LoginScreen } from '@/components/auth/LoginScreen';
 import { Toaster } from '@/components/effects/Toaster';
 import { GoalChip } from '@/components/layout/GoalChip';
 import { TabNav, TABS, type AppTab } from './TabNav';
@@ -14,11 +16,23 @@ import { cn } from '@/lib/utils';
 function AppShellInner() {
   const hydrate = useAppStore((s) => s.hydrate);
   const hydrated = useAppStore((s) => s._hydrated);
+  const { ready, user, storageKey } = useAuth();
   const [tab, setTab] = useState<AppTab>('dashboard');
 
+  // Re-hydrate whenever the canonical storage key changes (login / link).
   useEffect(() => {
-    void hydrate();
-  }, [hydrate]);
+    if (ready && user && storageKey) void hydrate();
+  }, [ready, user, storageKey, hydrate]);
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        <p className="animate-pulse text-sm">載入中…</p>
+      </div>
+    );
+  }
+
+  if (!user) return <LoginScreen />;
 
   if (!hydrated) {
     return (
@@ -91,8 +105,10 @@ function AppShellInner() {
 
 export function AppShell() {
   return (
-    <RewardProvider>
-      <AppShellInner />
-    </RewardProvider>
+    <AuthProvider>
+      <RewardProvider>
+        <AppShellInner />
+      </RewardProvider>
+    </AuthProvider>
   );
 }

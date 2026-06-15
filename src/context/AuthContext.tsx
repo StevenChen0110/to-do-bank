@@ -1,59 +1,132 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import liff from '@line/liff';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
+import type { User } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { setCurrentUser } from '@/lib/storage';
 
-const LIFF_ID = import.meta.env.VITE_LIFF_ID as string;
-
 interface AuthState {
-  userId: string | null;
-  displayName: string | null;
+  user: User | null;
+  /** Canonical storage key: linked LINE userId, else `auth:<uid>` */
+  storageKey: string | null;
+  /** Linked LINE userId, or null if not linked yet */
+  linkedLineId: string | null;
   ready: boolean;
-  error: string | null;
 }
 
-const AuthContext = createContext<AuthState>({
-  userId: null,
-  displayName: null,
+interface AuthApi extends AuthState {
+  signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirm: boolean }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signOut: () => Promise<void>;
+  linkLine: (code: string) => Promise<{ error: string | null }>;
+}
+
+const AuthContext = createContext<AuthApi>({
+  user: null,
+  storageKey: null,
+  linkedLineId: null,
   ready: false,
-  error: null,
+  signUp: async () => ({ error: null, needsConfirm: false }),
+  signIn: async () => ({ error: null }),
+  signOut: async () => {},
+  linkLine: async () => ({ error: null }),
 });
+
+async function resolveStorageKey(uid: string): Promise<{ key: string; lineId: string | null }> {
+  const { data } = await supabase
+    .from('account_links')
+    .select('line_user_id')
+    .eq('auth_uid', uid)
+    .maybeSingle();
+  if (data?.line_user_id) return { key: data.line_user_id, lineId: data.line_user_id };
+  return { key: `auth:${uid}`, lineId: null };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
-    userId: null,
-    displayName: null,
+    user: null,
+    storageKey: null,
+    linkedLineId: null,
     ready: false,
-    error: null,
   });
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        await liff.init({ liffId: LIFF_ID });
-
-        if (!liff.isLoggedIn()) {
-          liff.login({ redirectUri: window.location.href });
-          return; // page will redirect
-        }
-
-        const profile = await liff.getProfile();
-        setCurrentUser(profile.userId);
-        setState({
-          userId: profile.userId,
-          displayName: profile.displayName,
-          ready: true,
-          error: null,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'LINE 登入初始化失敗';
-        setState({ userId: null, displayName: null, ready: true, error: msg });
-      }
-    };
-
-    void init();
+  const applyUser = useCallback(async (user: User | null) => {
+    if (!user) {
+      setCurrentUser(null);
+      setState({ user: null, storageKey: null, linkedLineId: null, ready: true });
+      return;
+    }
+    const { key, lineId } = await resolveStorageKey(user.id);
+    setCurrentUser(key);
+    setState({ user, storageKey: key, linkedLineId: lineId, ready: true });
   }, []);
 
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => applyUser(data.session?.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      void applyUser(session?.user ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [applyUser]);
+
+  const signUp = useCallback(async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { error: error.message, needsConfirm: false };
+    // If email confirmation is required, session is null.
+    return { error: null, needsConfirm: data.session === null };
+  }, []);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error ? error.message : null };
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
+
+  const linkLine = useCallback(
+    async (code: string): Promise<{ error: string | null }> => {
+      if (!state.user) return { error: '尚未登入' };
+      const norm = code.trim().toUpperCase();
+      if (!norm) return { error: '請輸入配對碼' };
+
+      const { data: pairing } = await supabase
+        .from('pairing_codes')
+        .select('line_user_id, expires_at')
+        .eq('code', norm)
+        .maybeSingle();
+
+      if (!pairing) return { error: '配對碼無效' };
+      if (new Date(pairing.expires_at) < new Date()) {
+        return { error: '配對碼已過期，請在 LINE 重新輸入「綁定」' };
+      }
+
+      const { error } = await supabase
+        .from('account_links')
+        .upsert({ auth_uid: state.user.id, line_user_id: pairing.line_user_id });
+      if (error) {
+        // unique violation on line_user_id → already linked to another account
+        return { error: '此 LINE 帳號已被其他帳號連結' };
+      }
+
+      await supabase.from('pairing_codes').delete().eq('code', norm);
+      await applyUser(state.user); // re-point storage to the LINE row
+      return { error: null };
+    },
+    [state.user, applyUser],
+  );
+
+  return (
+    <AuthContext.Provider value={{ ...state, signUp, signIn, signOut, linkLine }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export const useAuth = () => useContext(AuthContext);

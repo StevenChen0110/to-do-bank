@@ -105,8 +105,22 @@ const HELP = `📖 To Do Bank 指令
 撲滿 / 餘額 — 查看撲滿餘額
 願望 [名稱] [金額] — 新增願望
 願望清單 — 查看願望進度
-我的ID — 查看你的 LINE ID
+綁定 — 取得網頁版配對碼
 說明 — 顯示此說明`;
+
+async function createPairingCode(lineUserId: string): Promise<string> {
+  // 6 chars, no ambiguous 0/O/1/I
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  await supabase
+    .from('pairing_codes')
+    .upsert({ code, line_user_id: lineUserId, expires_at: expiresAt });
+  return code;
+}
 
 async function handle(userId: string, text: string): Promise<string> {
   const t = text.trim();
@@ -115,7 +129,11 @@ async function handle(userId: string, text: string): Promise<string> {
   // 不需要讀資料的指令
   if (['說明', '?', '？', 'help'].includes(t)) return HELP;
   if (t === '我的ID' || t === '我的id') {
-    return `你的 LINE ID：\n${userId}\n\n可在網頁版「設定」輸入此 ID 來同步資料。`;
+    return `你的 LINE ID：\n${userId}`;
+  }
+  if (['綁定', '配對', '連結'].includes(t)) {
+    const code = await createPairingCode(userId);
+    return `🔗 你的配對碼：\n\n${code}\n\n10 分鐘內到網頁版「設定 → 連結 LINE」輸入這組碼，手機與電腦就會同步同一份資料。`;
   }
 
   const data = await load(userId);
