@@ -194,9 +194,9 @@ export function TodoLogPage() {
         )}
       </section>
 
-      {/* ── 存款明細 ──────────────────────────────── */}
+      {/* ── 待辦記錄 ──────────────────────────────── */}
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold">存款明細</span>
+        <span className="text-sm font-semibold">待辦記錄</span>
         <div className="h-px flex-1 bg-border" />
       </div>
 

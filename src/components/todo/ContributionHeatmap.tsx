@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { addDays, format, parse, startOfWeek, subWeeks } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import type { Task } from '@/types';
 import { localDateString } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 
-const WEEKS = 26; // ~6 months
-// Rows are Sun..Sat; only label Mon / Wed / Fri like GitHub.
-const WEEKDAY_LABELS = ['', '一', '', '三', '', '五', ''];
+type RangeId = '1m' | '3m' | '6m' | '1y';
+
+const RANGES: { id: RangeId; label: string; weeks: number }[] = [
+  { id: '1m', label: '一個月', weeks: 5 },
+  { id: '3m', label: '三個月', weeks: 13 },
+  { id: '6m', label: '半年', weeks: 27 },
+  { id: '1y', label: '一年', weeks: 53 },
+];
 
 interface ContributionHeatmapProps {
   tasks: Task[];
@@ -29,7 +34,11 @@ export function ContributionHeatmap({
   onSelectDay,
 }: ContributionHeatmapProps) {
   const todayKey = localDateString();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [range, setRange] = useState<RangeId>('3m');
+  const weeksCount = RANGES.find((r) => r.id === range)!.weeks;
+
+  // Gap shrinks as the grid gets denser so it always reads cleanly.
+  const gap = weeksCount <= 13 ? 4 : weeksCount <= 27 ? 3 : 2;
 
   // Completed tasks per scheduled date = daily "deposit" intensity.
   const counts = useMemo(() => {
@@ -42,11 +51,11 @@ export function ContributionHeatmap({
     return m;
   }, [tasks]);
 
-  const weeks = useMemo(() => {
+  const { weeks, startDate } = useMemo(() => {
     const today = parse(todayKey, 'yyyy-MM-dd', new Date());
-    const start = startOfWeek(subWeeks(today, WEEKS - 1), { weekStartsOn: 0 });
+    const start = startOfWeek(subWeeks(today, weeksCount - 1), { weekStartsOn: 0 });
     const cols: { key: string; date: Date }[][] = [];
-    for (let w = 0; w < WEEKS; w++) {
+    for (let w = 0; w < weeksCount; w++) {
       const col: { key: string; date: Date }[] = [];
       for (let d = 0; d < 7; d++) {
         const date = addDays(start, w * 7 + d);
@@ -54,110 +63,81 @@ export function ContributionHeatmap({
       }
       cols.push(col);
     }
-    return cols;
-  }, [todayKey]);
+    return { weeks: cols, startDate: start };
+  }, [todayKey, weeksCount]);
 
-  const monthLabels = useMemo(
-    () =>
-      weeks.map((col, i) => {
-        const first = col[0].date;
-        const prevFirst = i > 0 ? weeks[i - 1][0].date : null;
-        if (!prevFirst || first.getMonth() !== prevFirst.getMonth()) {
-          return format(first, 'M月', { locale: zhTW });
-        }
-        return '';
-      }),
-    [weeks],
-  );
-
-  const total = useMemo(
-    () => [...counts.values()].reduce((a, b) => a + b, 0),
-    [counts],
-  );
-
-  // Anchor scroll to the most recent week on mount.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollLeft = el.scrollWidth;
-  }, []);
+  const total = useMemo(() => {
+    let sum = 0;
+    for (const col of weeks) {
+      for (const { key } of col) sum += counts.get(key) ?? 0;
+    }
+    return sum;
+  }, [weeks, counts]);
 
   return (
     <section className="rounded-xl border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold">完成熱度</h3>
-        <span className="text-xs text-muted-foreground">
-          近 {WEEKS} 週完成 {total} 筆
-        </span>
+        <span className="text-xs text-muted-foreground">完成 {total} 筆</span>
       </div>
 
-      <div ref={scrollRef} className="overflow-x-auto">
-        <div className="inline-flex flex-col gap-1">
-          {/* Month labels */}
-          <div className="flex gap-[3px] pl-4">
-            {monthLabels.map((m, i) => (
-              <div key={i} className="w-[11px] text-[9px] text-muted-foreground">
-                {m && <span className="whitespace-nowrap">{m}</span>}
-              </div>
-            ))}
-          </div>
+      {/* 範圍 */}
+      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="熱力圖時間範圍">
+        {RANGES.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setRange(id)}
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+              range === id
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
+            )}
+            aria-pressed={range === id}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          <div className="flex gap-[3px]">
-            {/* Weekday labels */}
-            <div className="flex flex-col gap-[3px] pr-1">
-              {WEEKDAY_LABELS.map((l, i) => (
-                <div
-                  key={i}
-                  className="h-[11px] w-3 text-[9px] leading-[11px] text-muted-foreground"
-                >
-                  {l}
-                </div>
-              ))}
-            </div>
-
-            {/* Week columns */}
-            {weeks.map((col, i) => (
-              <div key={i} className="flex flex-col gap-[3px]">
-                {col.map(({ key, date }) => {
-                  const future = key > todayKey;
-                  const count = counts.get(key) ?? 0;
-                  const selected = key === selectedDay;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      disabled={future}
-                      onClick={() => onSelectDay(key)}
-                      title={
-                        future
-                          ? ''
-                          : `${format(date, 'M月d日', { locale: zhTW })}　完成 ${count} 筆`
-                      }
-                      className={cn(
-                        'size-[11px] rounded-[2px] transition',
-                        future ? 'bg-transparent' : levelClass(count),
-                        !future && 'hover:opacity-80',
-                        selected &&
-                          'ring-2 ring-primary ring-offset-1 ring-offset-card',
-                      )}
-                      aria-label={`${key} 完成 ${count} 筆`}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+      {/* 格子 — 滿版寬度 */}
+      <div className="flex" style={{ gap }}>
+        {weeks.map((col, i) => (
+          <div key={i} className="flex min-w-0 flex-1 flex-col" style={{ gap }}>
+            {col.map(({ key, date }) => {
+              const future = key > todayKey;
+              const count = counts.get(key) ?? 0;
+              const selected = key === selectedDay;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={future}
+                  onClick={() => onSelectDay(key)}
+                  title={
+                    future
+                      ? ''
+                      : `${format(date, 'M月d日', { locale: zhTW })}　完成 ${count} 筆`
+                  }
+                  className={cn(
+                    'aspect-square w-full rounded-[2px] transition',
+                    levelClass(future ? 0 : count),
+                    !future && 'hover:opacity-80',
+                    selected && 'ring-2 ring-primary ring-offset-1 ring-offset-card',
+                  )}
+                  aria-label={`${key} 完成 ${count} 筆`}
+                />
+              );
+            })}
           </div>
+        ))}
+      </div>
 
-          {/* Legend */}
-          <div className="flex items-center justify-end gap-1 pt-1 text-[9px] text-muted-foreground">
-            少
-            <span className="size-[11px] rounded-[2px] bg-muted" />
-            <span className="size-[11px] rounded-[2px] bg-primary/30" />
-            <span className="size-[11px] rounded-[2px] bg-primary/55" />
-            <span className="size-[11px] rounded-[2px] bg-primary/80" />
-            <span className="size-[11px] rounded-[2px] bg-primary" />
-            多
-          </div>
-        </div>
+      {/* 起訖月份 */}
+      <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>{format(startDate, 'yyyy/M月', { locale: zhTW })}</span>
+        <span>今天</span>
       </div>
     </section>
   );

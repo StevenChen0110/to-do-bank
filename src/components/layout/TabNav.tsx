@@ -9,7 +9,7 @@ export const TABS: {
   icon: typeof LayoutDashboard;
 }[] = [
   { id: 'dashboard', label: '撲滿', icon: LayoutDashboard },
-  { id: 'todo', label: '明細', icon: ListChecks },
+  { id: 'todo', label: '待辦', icon: ListChecks },
   { id: 'journal', label: '日記', icon: BookOpen },
   { id: 'wishes', label: '願望', icon: Sparkles },
   { id: 'settings', label: '設定', icon: Settings },
