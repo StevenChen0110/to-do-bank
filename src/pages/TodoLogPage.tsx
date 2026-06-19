@@ -11,7 +11,6 @@ import { useReward } from '@/context/RewardContext';
 import { allCategories, labelForCategory } from '@/lib/categories';
 import { ContributionHeatmap } from '@/components/todo/ContributionHeatmap';
 import { QuickAddInput } from '@/components/todo/QuickAddInput';
-import { JournalSection } from '@/components/todo/JournalSection';
 import { TaskList } from '@/components/todo/TaskList';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -379,12 +378,6 @@ export function TodoLogPage() {
           })}
         </div>
       )}
-
-      {/* ── 今日日記 ──────────────────────────────── */}
-      <section className="rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-semibold">今日日記</h3>
-        <JournalSection dateKey={todayKey} />
-      </section>
     </div>
   );
 }

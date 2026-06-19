@@ -9,6 +9,7 @@ import { GoalChip } from '@/components/layout/GoalChip';
 import { TabNav, TABS, type AppTab } from './TabNav';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TodoLogPage } from '@/pages/TodoLogPage';
+import { JournalPage } from '@/pages/JournalPage';
 import { WishlistPage } from '@/pages/WishlistPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { cn } from '@/lib/utils';
@@ -91,6 +92,7 @@ function AppShellInner() {
           <div className="mx-auto max-w-2xl">
             {tab === 'dashboard' && <DashboardPage onNavigate={setTab} />}
             {tab === 'todo' && <TodoLogPage />}
+            {tab === 'journal' && <JournalPage />}
             {tab === 'wishes' && <WishlistPage />}
             {tab === 'settings' && <SettingsPage />}
           </div>
