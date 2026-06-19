@@ -22,6 +22,7 @@ interface AuthState {
 interface AuthApi extends AuthState {
   signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirm: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   linkLine: (code: string) => Promise<{ error: string | null }>;
 }
@@ -33,6 +34,7 @@ const AuthContext = createContext<AuthApi>({
   ready: false,
   signUp: async () => ({ error: null, needsConfirm: false }),
   signIn: async () => ({ error: null }),
+  signInWithGoogle: async () => ({ error: null }),
   signOut: async () => {},
   linkLine: async () => ({ error: null }),
 });
@@ -86,6 +88,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? error.message : null };
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    return { error: error ? error.message : null };
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -123,7 +133,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <AuthContext.Provider value={{ ...state, signUp, signIn, signOut, linkLine }}>
+    <AuthContext.Provider
+      value={{ ...state, signUp, signIn, signInWithGoogle, signOut, linkLine }}
+    >
       {children}
     </AuthContext.Provider>
   );
