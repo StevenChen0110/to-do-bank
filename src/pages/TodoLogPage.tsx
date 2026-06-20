@@ -9,7 +9,6 @@ import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
 import { allCategories, labelForCategory } from '@/lib/categories';
-import { ContributionHeatmap } from '@/components/todo/ContributionHeatmap';
 import { QuickAddInput } from '@/components/todo/QuickAddInput';
 import { TaskList } from '@/components/todo/TaskList';
 import { Input } from '@/components/ui/input';
@@ -66,10 +65,6 @@ export function TodoLogPage() {
     return { effFrom: localDateString(addDays(today, -(days - 1))), effTo: todayKey };
   }, [timeRange, customFrom, customTo, todayKey]);
 
-  // A single day picked from the heatmap (custom range collapsed to one day).
-  const selectedDay =
-    timeRange === 'custom' && customFrom && customFrom === customTo ? customFrom : null;
-
   const handleComplete = (taskId: string) => {
     unlockAudioFromGesture();
     const task = tasks.find((t) => t.id === taskId);
@@ -97,19 +92,6 @@ export function TodoLogPage() {
       'info',
       task.completedAt != null ? `NT$${task.reward} 已從撲滿退回` : undefined,
     );
-  };
-
-  const handleSelectDay = (day: string) => {
-    if (selectedDay === day) {
-      // Toggle off → back to showing everything.
-      setTimeRange('all');
-      setCustomFrom('');
-      setCustomTo('');
-    } else {
-      setTimeRange('custom');
-      setCustomFrom(day);
-      setCustomTo(day);
-    }
   };
 
   const filtered = useMemo(
@@ -199,13 +181,6 @@ export function TodoLogPage() {
         <span className="text-sm font-semibold">待辦記錄</span>
         <div className="h-px flex-1 bg-border" />
       </div>
-
-      {/* 完成熱度 */}
-      <ContributionHeatmap
-        tasks={tasks}
-        selectedDay={selectedDay}
-        onSelectDay={handleSelectDay}
-      />
 
       {/* 篩選 */}
       <section className="flex flex-col gap-3">
