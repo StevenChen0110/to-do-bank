@@ -7,6 +7,7 @@ import { useTodayTasks } from '@/hooks/useTodayTasks';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
 import { BalanceHero } from '@/components/dashboard/BalanceHero';
+import { BalanceTrend } from '@/components/dashboard/BalanceTrend';
 import { TodaySnapshot } from '@/components/dashboard/TodaySnapshot';
 import { NearestWishCard } from '@/components/dashboard/NearestWishCard';
 import type { AppTab } from '@/components/layout/TabNav';
@@ -49,6 +50,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   return (
     <div className="flex flex-col gap-4">
       <BalanceHero balance={balance} totalEarned={totalEarned} wish={dashboardWish} />
+      <BalanceTrend
+        transactions={transactions}
+        goalCost={dashboardWish?.cost}
+        goalLabel={dashboardWish?.title}
+      />
       <TodaySnapshot
         tasks={todayTasks}
         dailyEarned={dailyEarned}
