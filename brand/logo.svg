@@ -1,25 +1,13 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="To Do Bank logo">
-  <defs>
-    <linearGradient id="tdbBg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#14b8a6"/>
-      <stop offset="100%" stop-color="#0b7d72"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Rounded square background -->
-  <rect width="512" height="512" rx="116" fill="url(#tdbBg)"/>
+  <!-- Rounded square background — app primary color -->
+  <rect width="512" height="512" rx="116" fill="#00804F"/>
 
   <!-- Piggy bank (lucide-style) -->
-  <g transform="translate(96 104) scale(11.85)"
+  <g transform="translate(96 112) scale(11.85)"
      fill="none" stroke="#ffffff" stroke-width="1.7"
      stroke-linecap="round" stroke-linejoin="round">
     <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/>
     <path d="M2 9v1c0 1.1.9 2 2 2h1"/>
     <path d="M16 11h.01"/>
   </g>
-
-  <!-- "Done" check badge -->
-  <circle cx="400" cy="398" r="66" fill="#ffffff"/>
-  <path d="M372 399 l18 19 l34 -40" fill="none" stroke="#0b7d72"
-        stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

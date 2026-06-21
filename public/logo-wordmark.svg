@@ -1,29 +1,19 @@
 <svg width="780" height="240" viewBox="0 0 780 240" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="To Do Bank">
-  <defs>
-    <linearGradient id="tdbBg2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#14b8a6"/>
-      <stop offset="100%" stop-color="#0b7d72"/>
-    </linearGradient>
-  </defs>
-
   <!-- Mark -->
   <g transform="translate(20 20)">
-    <rect width="200" height="200" rx="46" fill="url(#tdbBg2)"/>
-    <g transform="translate(37 41) scale(4.63)"
+    <rect width="200" height="200" rx="46" fill="#00804F"/>
+    <g transform="translate(37 44) scale(4.63)"
        fill="none" stroke="#ffffff" stroke-width="1.7"
        stroke-linecap="round" stroke-linejoin="round">
       <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/>
       <path d="M2 9v1c0 1.1.9 2 2 2h1"/>
       <path d="M16 11h.01"/>
     </g>
-    <circle cx="156" cy="155" r="26" fill="#ffffff"/>
-    <path d="M145 155 l7 7.5 l13 -15.5" fill="none" stroke="#0b7d72"
-          stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 
   <!-- Wordmark -->
   <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif" font-weight="800">
     <text x="252" y="138" font-size="74" fill="#0f172a" letter-spacing="-1">To Do</text>
-    <text x="252" y="206" font-size="74" fill="#0d9488" letter-spacing="-1">Bank</text>
+    <text x="252" y="206" font-size="74" fill="#00804F" letter-spacing="-1">Bank</text>
   </g>
 </svg>
