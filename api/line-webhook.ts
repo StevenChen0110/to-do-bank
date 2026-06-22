@@ -101,7 +101,7 @@ const HELP = `📖 To Do Bank 指令
 新增 [待辦] — 新增今日待辦
 完成 [待辦] — 完成並入帳
 刪除 [待辦] — 刪除待辦
-待辦 / 今日 — 今日代辦清單
+待辦 / 今日 — 今日待辦清單
 撲滿 / 餘額 — 查看撲滿餘額
 願望 [名稱] [金額] — 新增願望
 願望清單 — 查看願望進度
@@ -190,7 +190,7 @@ async function handle(userId: string, text: string): Promise<string> {
     return `🗑️ 已刪除：${task.title}`;
   }
 
-  // ── 今日代辦 ────────────────────────────
+  // ── 今日待辦 ────────────────────────────
   if (['待辦', '今日', '代辦'].includes(t)) {
     const todayTasks = data.tasks.filter(t => t.scheduledDate === today);
     if (todayTasks.length === 0)
@@ -198,7 +198,7 @@ async function handle(userId: string, text: string): Promise<string> {
     const pending = todayTasks.filter(t => t.completedAt === null);
     const done = todayTasks.filter(t => t.completedAt !== null);
     const earned = done.reduce((s, t) => s + t.reward, 0);
-    const lines = [`📋 今日代辦 ${today}`, ''];
+    const lines = [`📋 今日待辦 ${today}`, ''];
     pending.forEach(t => lines.push(`⭕ ${t.title}（+${fmt(t.reward)}）`));
     if (done.length > 0) {
       if (pending.length > 0) lines.push('');

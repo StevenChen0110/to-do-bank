@@ -23,7 +23,7 @@ export function TodaySnapshot({ tasks, dailyEarned, onComplete, onNavigate }: To
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <ListTodo className="h-4 w-4 text-primary" />
-          今日代辦
+          今日待辦
         </h2>
         <div className="flex items-center gap-2">
           {total > 0 && (
@@ -36,7 +36,7 @@ export function TodaySnapshot({ tasks, dailyEarned, onComplete, onNavigate }: To
             type="button"
             onClick={onNavigate}
             className="flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary active:scale-95"
-            aria-label="前往規劃今日代辦"
+            aria-label="前往規劃今日待辦"
           >
             <ClipboardList className="h-3 w-3" />
             規劃
@@ -59,7 +59,7 @@ export function TodaySnapshot({ tasks, dailyEarned, onComplete, onNavigate }: To
         {total === 0 ? (
           <div className="flex flex-col items-center gap-3 pb-4 pt-1 text-center">
             <p className="text-sm text-muted-foreground">
-              今天還沒有代辦。點「規劃」新增任務，打勾完成後自動入帳。
+              今天還沒有待辦。點「規劃」新增任務，打勾完成後自動入帳。
             </p>
             <button
               type="button"
@@ -67,7 +67,7 @@ export function TodaySnapshot({ tasks, dailyEarned, onComplete, onNavigate }: To
               className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 active:scale-95"
             >
               <ClipboardList className="h-3.5 w-3.5" />
-              開始規劃今日代辦
+              開始規劃今日待辦
             </button>
           </div>
         ) : (
