@@ -12,6 +12,7 @@ export const EMPTY_DATA: AppData = {
   transactions: [],
   journalEntries: [],
   habits: [],
+  projects: [],
   settings: normalizeSettings(undefined),
 };
 
@@ -55,6 +56,7 @@ function parseStoredData(raw: unknown): AppData {
     transactions: stored.transactions ?? [],
     journalEntries: stored.journalEntries ?? [],
     habits: stored.habits ?? [],
+    projects: stored.projects ?? [],
     settings: normalizeSettings(stored.settings),
   });
 }

@@ -6,6 +6,10 @@ import type {
   Habit,
   JournalEntry,
   LogTaskOptions,
+  Project,
+  ProjectPhase,
+  ProjectStep,
+  ProjectTemplate,
   Task,
   TaskCategory,
   Transaction,
@@ -23,7 +27,7 @@ import { loadAppData, saveAppData } from '../lib/storage';
 
 type PersistableState = Pick<
   AppData,
-  'tasks' | 'wishes' | 'transactions' | 'journalEntries' | 'habits' | 'settings'
+  'tasks' | 'wishes' | 'transactions' | 'journalEntries' | 'habits' | 'projects' | 'settings'
 >;
 
 interface AddHabitInput {
@@ -79,6 +83,25 @@ interface AppStore extends PersistableState {
   deleteHabit: (id: string) => void;
   /** Create today's missing habit task instances. Idempotent. */
   materializeHabitTasks: (dateKey: string) => void;
+  addProject: (input: {
+    title: string;
+    goal?: string;
+    template: ProjectTemplate;
+  }) => void;
+  updateProject: (
+    id: string,
+    patch: Partial<Pick<Project, 'title' | 'goal' | 'status'>>,
+  ) => void;
+  deleteProject: (id: string) => void;
+  addStep: (projectId: string, title: string, phase?: ProjectPhase) => void;
+  updateStep: (
+    projectId: string,
+    stepId: string,
+    patch: Partial<Pick<ProjectStep, 'title' | 'done'>>,
+  ) => void;
+  deleteStep: (projectId: string, stepId: string) => void;
+  /** Create a 待辦 task from a step and link it. */
+  pushStepToTodo: (projectId: string, stepId: string, dateKey?: string) => void;
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -91,6 +114,7 @@ function persistPayload(state: PersistableState): AppData {
     transactions: state.transactions,
     journalEntries: state.journalEntries,
     habits: state.habits,
+    projects: state.projects,
     settings: state.settings,
   };
 }
@@ -119,6 +143,7 @@ function toPersistable(state: AppStore): PersistableState {
     transactions: state.transactions,
     journalEntries: state.journalEntries,
     habits: state.habits,
+    projects: state.projects,
     settings: state.settings,
   };
 }
@@ -214,6 +239,7 @@ export const useAppStore = create<AppStore>((set) => ({
   transactions: [],
   journalEntries: [],
   habits: [],
+  projects: [],
   settings: normalizeSettings(undefined),
   _hydrated: false,
 
@@ -225,6 +251,7 @@ export const useAppStore = create<AppStore>((set) => ({
       transactions: data.transactions,
       journalEntries: data.journalEntries,
       habits: data.habits,
+      projects: data.projects,
       settings: data.settings,
       _hydrated: true,
     });
@@ -668,6 +695,156 @@ export const useAppStore = create<AppStore>((set) => ({
       }
       if (created.length === 0) return state;
       const next: AppStore = { ...state, tasks: [...created, ...state.tasks] };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  addProject: (input) => {
+    const title = input.title.trim().slice(0, 80);
+    if (!title) return;
+    const now = new Date().toISOString();
+    set((state) => {
+      const project: Project = {
+        id: uuidv4(),
+        title,
+        goal: (input.goal ?? '').trim().slice(0, 200),
+        template: input.template,
+        status: 'active',
+        steps: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      const next: AppStore = { ...state, projects: [project, ...state.projects] };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  updateProject: (id, patch) => {
+    const now = new Date().toISOString();
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === id ? { ...p, ...patch, updatedAt: now } : p,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  deleteProject: (id) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        projects: state.projects.filter((p) => p.id !== id),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  addStep: (projectId, title, phase) => {
+    const trimmed = title.trim().slice(0, 120);
+    if (!trimmed) return;
+    const now = new Date().toISOString();
+    set((state) => {
+      const step: ProjectStep = {
+        id: uuidv4(),
+        title: trimmed,
+        phase,
+        taskId: null,
+        done: false,
+      };
+      const next: AppStore = {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === projectId
+            ? { ...p, steps: [...p.steps, step], updatedAt: now }
+            : p,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  updateStep: (projectId, stepId, patch) => {
+    const now = new Date().toISOString();
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === projectId
+            ? {
+                ...p,
+                updatedAt: now,
+                steps: p.steps.map((s) =>
+                  s.id === stepId ? { ...s, ...patch } : s,
+                ),
+              }
+            : p,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  deleteStep: (projectId, stepId) => {
+    const now = new Date().toISOString();
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === projectId
+            ? { ...p, updatedAt: now, steps: p.steps.filter((s) => s.id !== stepId) }
+            : p,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  pushStepToTodo: (projectId, stepId, dateKey) => {
+    const now = new Date().toISOString();
+    const scheduledDate = dateKey ?? localDateString();
+    set((state) => {
+      const project = state.projects.find((p) => p.id === projectId);
+      const step = project?.steps.find((s) => s.id === stepId);
+      if (!project || !step) return state;
+      if (step.taskId && state.tasks.some((t) => t.id === step.taskId)) {
+        return state; // already pushed
+      }
+      const taskId = uuidv4();
+      const task: Task = {
+        id: taskId,
+        title: (step.title || project.title).slice(0, 200),
+        category: 'other',
+        reward: state.settings.smallTaskReward,
+        scheduledDate,
+        completedAt: null,
+        createdAt: now,
+        source: { type: 'project', refId: projectId },
+      };
+      const next: AppStore = {
+        ...state,
+        tasks: [task, ...state.tasks],
+        projects: state.projects.map((p) =>
+          p.id === projectId
+            ? {
+                ...p,
+                updatedAt: now,
+                steps: p.steps.map((s) =>
+                  s.id === stepId ? { ...s, taskId } : s,
+                ),
+              }
+            : p,
+        ),
+      };
       schedulePersist(toPersistable(next));
       return next;
     });

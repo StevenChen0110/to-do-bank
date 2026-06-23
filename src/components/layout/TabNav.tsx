@@ -1,7 +1,22 @@
-import { BookOpen, LayoutDashboard, ListChecks, Repeat, Settings, Sparkles } from 'lucide-react';
+import {
+  BookOpen,
+  FolderKanban,
+  LayoutDashboard,
+  ListChecks,
+  Repeat,
+  Settings,
+  Sparkles,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type AppTab = 'dashboard' | 'todo' | 'habit' | 'journal' | 'wishes' | 'settings';
+export type AppTab =
+  | 'dashboard'
+  | 'todo'
+  | 'habit'
+  | 'project'
+  | 'journal'
+  | 'wishes'
+  | 'settings';
 
 export const TABS: {
   id: AppTab;
@@ -11,10 +26,14 @@ export const TABS: {
   { id: 'dashboard', label: '撲滿', icon: LayoutDashboard },
   { id: 'todo', label: '待辦', icon: ListChecks },
   { id: 'habit', label: '習慣', icon: Repeat },
+  { id: 'project', label: '專案', icon: FolderKanban },
   { id: 'journal', label: '日記', icon: BookOpen },
   { id: 'wishes', label: '願望', icon: Sparkles },
   { id: 'settings', label: '設定', icon: Settings },
 ];
+
+/** Bottom nav (mobile) omits 設定 — reached via the header gear. */
+const MOBILE_TABS = TABS.filter((t) => t.id !== 'settings');
 
 interface TabNavProps {
   active: AppTab;
@@ -28,7 +47,7 @@ export function TabNav({ active, onChange }: TabNavProps) {
       aria-label="主要導覽"
     >
       <div className="mx-auto flex max-w-md items-stretch justify-around px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
-        {TABS.map(({ id, label, icon: Icon }) => {
+        {MOBILE_TABS.map(({ id, label, icon: Icon }) => {
           const selected = active === id;
           return (
             <button

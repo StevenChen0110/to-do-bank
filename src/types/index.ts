@@ -87,6 +87,33 @@ export interface AppSettings {
   customCategories: CategoryDef[];
 }
 
+export type ProjectPhase = 'plan' | 'do' | 'check' | 'act';
+export type ProjectTemplate = 'pdca' | 'checklist';
+export type ProjectStatus = 'active' | 'done' | 'archived';
+
+export interface ProjectStep {
+  id: string;
+  title: string;
+  /** PDCA bucket; absent for checklist templates */
+  phase?: ProjectPhase;
+  /** Linked task once pushed into 待辦 */
+  taskId: string | null;
+  /** Local "done" for planning steps that were never pushed to a task */
+  done: boolean;
+}
+
+export interface Project {
+  id: string;
+  title: string;
+  /** 完成的樣子 */
+  goal: string;
+  template: ProjectTemplate;
+  status: ProjectStatus;
+  steps: ProjectStep[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AppData {
   version: 1;
   tasks: Task[];
@@ -94,6 +121,7 @@ export interface AppData {
   transactions: Transaction[];
   journalEntries: JournalEntry[];
   habits: Habit[];
+  projects: Project[];
   settings: AppSettings;
 }
 

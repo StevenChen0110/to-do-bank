@@ -16,6 +16,7 @@ export function TaskItem({ task, onDelete, onComplete }: TaskItemProps) {
   const completed = task.completedAt !== null;
   const customCategories = useAppStore((s) => s.settings.customCategories);
   const habits = useAppStore((s) => s.habits);
+  const projects = useAppStore((s) => s.projects);
   const catLabel = labelForCategory(task.category, customCategories);
 
   let sourceLabel: string | null = null;
@@ -23,7 +24,8 @@ export function TaskItem({ task, onDelete, onComplete }: TaskItemProps) {
     const h = habits.find((x) => x.id === task.source!.refId);
     sourceLabel = `🔁 ${h?.title ?? '習慣'}`;
   } else if (task.source?.type === 'project') {
-    sourceLabel = '📁 專案';
+    const p = projects.find((x) => x.id === task.source!.refId);
+    sourceLabel = `📁 ${p?.title ?? '專案'}`;
   }
 
   return (

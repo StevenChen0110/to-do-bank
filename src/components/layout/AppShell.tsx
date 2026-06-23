@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PiggyBank } from 'lucide-react';
+import { PiggyBank, Settings } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { RewardProvider } from '@/context/RewardContext';
@@ -10,6 +10,7 @@ import { TabNav, TABS, type AppTab } from './TabNav';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TodoLogPage } from '@/pages/TodoLogPage';
 import { HabitsPage } from '@/pages/HabitsPage';
+import { ProjectsPage } from '@/pages/ProjectsPage';
 import { JournalPage } from '@/pages/JournalPage';
 import { WishlistPage } from '@/pages/WishlistPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -66,7 +67,23 @@ function AppShellInner() {
               </p>
             </div>
           </div>
-          {showGoalChip && <GoalChip className="pt-px" />}
+          <div className="flex shrink-0 items-center gap-2 pt-px">
+            {showGoalChip && <GoalChip />}
+            <button
+              type="button"
+              onClick={() => setTab('settings')}
+              aria-label="設定"
+              aria-current={tab === 'settings' ? 'page' : undefined}
+              className={cn(
+                'rounded-lg p-2 transition-colors',
+                tab === 'settings'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              <Settings className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -101,6 +118,7 @@ function AppShellInner() {
             {tab === 'dashboard' && <DashboardPage onNavigate={setTab} />}
             {tab === 'todo' && <TodoLogPage />}
             {tab === 'habit' && <HabitsPage />}
+            {tab === 'project' && <ProjectsPage />}
             {tab === 'journal' && <JournalPage />}
             {tab === 'wishes' && <WishlistPage />}
             {tab === 'settings' && <SettingsPage />}

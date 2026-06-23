@@ -31,6 +31,7 @@ const EMPTY: AppData = {
   transactions: [],
   journalEntries: [],
   habits: [],
+  projects: [],
   settings: {
     smallTaskReward: 10,
     bigTaskReward: 30,
@@ -59,6 +60,13 @@ interface Habit {
   weekdays: number[]; startDate: string; targetDays: number;
   active: boolean; createdAt: string; archivedAt: string | null;
 }
+interface ProjectStep {
+  id: string; title: string; phase?: string; taskId: string | null; done: boolean;
+}
+interface Project {
+  id: string; title: string; goal: string; template: string; status: string;
+  steps: ProjectStep[]; createdAt: string; updatedAt: string;
+}
 interface Settings {
   smallTaskReward: number; bigTaskReward: number; soundEnabled: boolean;
   diaryCountsAsTask: boolean; pinnedWishId: string | null;
@@ -67,7 +75,7 @@ interface Settings {
 interface AppData {
   version: 1; tasks: Task[]; wishes: Wish[];
   transactions: Transaction[]; journalEntries: unknown[];
-  habits: Habit[]; settings: Settings;
+  habits: Habit[]; projects: Project[]; settings: Settings;
 }
 
 async function load(userId: string): Promise<AppData> {
@@ -82,6 +90,7 @@ async function load(userId: string): Promise<AppData> {
     transactions: d.transactions ?? [],
     journalEntries: d.journalEntries ?? [],
     habits: d.habits ?? [],
+    projects: d.projects ?? [],
     settings: { ...EMPTY.settings, ...(d.settings ?? {}) },
   };
 }
@@ -177,6 +186,7 @@ const HELP = `📖 To Do Bank 指令
 
 【其他】
 撲滿 — 查看餘額與目標
+專案 — 查看專案進度
 綁定 — 取得網頁配對碼
 說明 — 顯示此說明`;
 
@@ -246,6 +256,27 @@ async function handle(userId: string, text: string): Promise<string> {
       lines.push(`${mark} ${h.title}　🔥${habitStreak(data, h.id, today)}`);
     }
     lines.push('', '完成請用：完成 [習慣名稱]');
+    return lines.join('\n');
+  }
+
+  // ── 專案進度 ────────────────────────────
+  if (t === '專案') {
+    const active = data.projects.filter((p) => p.status === 'active');
+    if (active.length === 0) {
+      return '📁 還沒有專案\n\n到網頁版「專案」用 PDCA 模板規劃，再把步驟送進待辦';
+    }
+    const lines = ['📁 進行中專案', ''];
+    for (const p of active) {
+      const total = p.steps.length;
+      const done = p.steps.filter((s) =>
+        s.taskId
+          ? data.tasks.find((x) => x.id === s.taskId)?.completedAt != null
+          : s.done,
+      ).length;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      lines.push(`• ${p.title} — ${done}/${total}（${pct}%）`);
+    }
+    lines.push('', '規劃與步驟管理請到網頁版');
     return lines.join('\n');
   }
 
