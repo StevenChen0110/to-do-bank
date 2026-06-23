@@ -98,14 +98,23 @@ async function reply(replyToken: string, text: string): Promise<void> {
 
 const HELP = `📖 To Do Bank 指令
 
-新增 [待辦] — 新增今日待辦
+【待辦】
+新增 [待辦] — 新增小任務
+新增大 [待辦] — 新增大任務
 完成 [待辦] — 完成並入帳
 刪除 [待辦] — 刪除待辦
-待辦 / 今日 — 今日待辦清單
-撲滿 / 餘額 — 查看撲滿餘額
+待辦 — 今日待辦清單
+
+【願望】
 願望 [名稱] [金額] — 新增願望
-願望清單 — 查看願望進度
-綁定 — 取得網頁版配對碼
+願望清單 — 查看進度
+釘選 [願望] — 設為主目標
+兌換 [願望] — 用餘額兌換
+刪除願望 [願望] — 刪除願望
+
+【其他】
+撲滿 — 查看餘額與目標
+綁定 — 取得網頁配對碼
 說明 — 顯示此說明`;
 
 async function createPairingCode(lineUserId: string): Promise<string> {
@@ -139,6 +148,19 @@ async function handle(userId: string, text: string): Promise<string> {
   const data = await load(userId);
   const now = new Date().toISOString();
   const bal = () => data.transactions.reduce((s, tx) => s + tx.amount, 0);
+
+  // ── 新增大任務 ──────────────────────────
+  if (t.startsWith('新增大 ')) {
+    const title = t.slice(4).trim();
+    if (!title) return '請輸入待辦名稱，例如：新增大 健身一小時';
+    const reward = data.settings.bigTaskReward;
+    data.tasks.unshift({
+      id: uuidv4(), title: title.slice(0, 200), category: 'other',
+      reward, scheduledDate: today, completedAt: null, createdAt: now,
+    });
+    await save(userId, data);
+    return `✅ 已新增大任務：${title}\n打勾完成後 +${fmt(reward)} 入帳`;
+  }
 
   // ── 新增待辦 ────────────────────────────
   if (t.startsWith('新增 ') || t.startsWith('+ ')) {
@@ -241,12 +263,67 @@ async function handle(userId: string, text: string): Promise<string> {
     const active = data.wishes.filter(w => !w.redeemedAt);
     if (active.length === 0) return '🌟 還沒有願望\n\n輸入「願望 [名稱] [金額]」來新增';
     const balance = bal();
+    const pinnedId = data.settings.pinnedWishId;
     const lines = ['🌟 願望清單', ''];
     active.forEach((w, i) => {
       const pct = Math.min(100, Math.round((balance / w.cost) * 100));
-      lines.push(`${i + 1}. ${w.title} — ${fmt(w.cost)}（${pct}%）`);
+      const star = w.id === pinnedId ? '🎯 ' : '';
+      const ok = balance >= w.cost ? '　✅ 可兌換' : '';
+      lines.push(`${i + 1}. ${star}${w.title} — ${fmt(w.cost)}（${pct}%）${ok}`);
     });
     return lines.join('\n');
+  }
+
+  // 找出未兌換的願望（用名稱關鍵字）
+  const findWish = (kw: string) =>
+    data.wishes.find(w => !w.redeemedAt && w.title.includes(kw));
+
+  // ── 釘選主目標 ──────────────────────────
+  if (t.startsWith('釘選 ')) {
+    const kw = t.slice(3).trim();
+    const wish = findWish(kw);
+    if (!wish) return `找不到願望「${kw}」`;
+    data.settings.pinnedWishId = wish.id;
+    await save(userId, data);
+    const pct = Math.min(100, Math.round((bal() / wish.cost) * 100));
+    return `🎯 已設為主目標：${wish.title}\n目前進度：${pct}%`;
+  }
+  if (t === '取消釘選') {
+    data.settings.pinnedWishId = null;
+    await save(userId, data);
+    return '已取消主目標釘選';
+  }
+
+  // ── 兌換願望 ────────────────────────────
+  if (t.startsWith('兌換 ')) {
+    const kw = t.slice(3).trim();
+    if (!kw) return '格式：兌換 [願望名稱]';
+    const wish = findWish(kw);
+    if (!wish) return `找不到願望「${kw}」`;
+    const balance = bal();
+    if (balance < wish.cost) {
+      return `餘額不足，無法兌換「${wish.title}」\n還差 ${fmt(wish.cost - balance)}`;
+    }
+    wish.redeemedAt = now;
+    data.transactions.push({
+      id: uuidv4(), type: 'wish_redeem', amount: -wish.cost,
+      wishId: wish.id, createdAt: now, note: wish.title,
+    });
+    if (data.settings.pinnedWishId === wish.id) data.settings.pinnedWishId = null;
+    await save(userId, data);
+    return `🎁 已兌換：${wish.title}（-${fmt(wish.cost)}）\n剩餘餘額：${fmt(bal())}`;
+  }
+
+  // ── 刪除願望 ────────────────────────────
+  if (t.startsWith('刪除願望 ')) {
+    const kw = t.slice(5).trim();
+    const idx = data.wishes.findIndex(w => !w.redeemedAt && w.title.includes(kw));
+    if (idx === -1) return `找不到願望「${kw}」`;
+    const w = data.wishes[idx];
+    data.wishes.splice(idx, 1);
+    if (data.settings.pinnedWishId === w.id) data.settings.pinnedWishId = null;
+    await save(userId, data);
+    return `🗑️ 已刪除願望：${w.title}`;
   }
 
   return `不認識這個指令。\n輸入「說明」查看所有指令。`;
