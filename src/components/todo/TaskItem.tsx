@@ -15,7 +15,16 @@ interface TaskItemProps {
 export function TaskItem({ task, onDelete, onComplete }: TaskItemProps) {
   const completed = task.completedAt !== null;
   const customCategories = useAppStore((s) => s.settings.customCategories);
+  const habits = useAppStore((s) => s.habits);
   const catLabel = labelForCategory(task.category, customCategories);
+
+  let sourceLabel: string | null = null;
+  if (task.source?.type === 'habit') {
+    const h = habits.find((x) => x.id === task.source!.refId);
+    sourceLabel = `🔁 ${h?.title ?? '習慣'}`;
+  } else if (task.source?.type === 'project') {
+    sourceLabel = '📁 專案';
+  }
 
   return (
     <li className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-3">
@@ -41,6 +50,11 @@ export function TaskItem({ task, onDelete, onComplete }: TaskItemProps) {
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <Badge variant="muted">{catLabel}</Badge>
+          {sourceLabel && (
+            <Badge variant="outline" className="border-primary/30 text-primary">
+              {sourceLabel}
+            </Badge>
+          )}
           {completed ? (
             <span className="text-xs font-medium text-primary">
               +{formatCurrency(task.reward)}

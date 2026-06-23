@@ -7,6 +7,12 @@ export type TaskSize = 'small' | 'big';
 /** Derived from balance + redemption; not persisted on Wish */
 export type WishStatus = 'locked' | 'available' | 'redeemed';
 
+/** Where a task came from. Absent = added manually. */
+export interface TaskSource {
+  type: 'habit' | 'project';
+  refId: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -15,6 +21,25 @@ export interface Task {
   scheduledDate: string;
   completedAt: string | null;
   createdAt: string;
+  source?: TaskSource;
+}
+
+export interface Habit {
+  id: string;
+  title: string;
+  /** Habit-stacking cue ("刷牙後")，可空字串 */
+  cue: string;
+  category: TaskCategory;
+  /** Reward credited per completion */
+  reward: number;
+  /** Days of week 0–6 (Sun–Sat); all seven = daily */
+  weekdays: number[];
+  startDate: string;
+  /** 養成目標天數，預設 21 */
+  targetDays: number;
+  active: boolean;
+  createdAt: string;
+  archivedAt: string | null;
 }
 
 export interface Wish {
@@ -68,6 +93,7 @@ export interface AppData {
   wishes: Wish[];
   transactions: Transaction[];
   journalEntries: JournalEntry[];
+  habits: Habit[];
   settings: AppSettings;
 }
 

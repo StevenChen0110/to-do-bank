@@ -9,14 +9,17 @@ import { GoalChip } from '@/components/layout/GoalChip';
 import { TabNav, TABS, type AppTab } from './TabNav';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TodoLogPage } from '@/pages/TodoLogPage';
+import { HabitsPage } from '@/pages/HabitsPage';
 import { JournalPage } from '@/pages/JournalPage';
 import { WishlistPage } from '@/pages/WishlistPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { localDateString } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 
 function AppShellInner() {
   const hydrate = useAppStore((s) => s.hydrate);
   const hydrated = useAppStore((s) => s._hydrated);
+  const materializeHabitTasks = useAppStore((s) => s.materializeHabitTasks);
   const { ready, user, storageKey } = useAuth();
   const [tab, setTab] = useState<AppTab>('dashboard');
 
@@ -24,6 +27,11 @@ function AppShellInner() {
   useEffect(() => {
     if (ready && user && storageKey) void hydrate();
   }, [ready, user, storageKey, hydrate]);
+
+  // After data is loaded, lazily create today's habit task instances.
+  useEffect(() => {
+    if (hydrated) materializeHabitTasks(localDateString());
+  }, [hydrated, materializeHabitTasks]);
 
   if (!ready) {
     return (
@@ -92,6 +100,7 @@ function AppShellInner() {
           <div className="mx-auto max-w-2xl">
             {tab === 'dashboard' && <DashboardPage onNavigate={setTab} />}
             {tab === 'todo' && <TodoLogPage />}
+            {tab === 'habit' && <HabitsPage />}
             {tab === 'journal' && <JournalPage />}
             {tab === 'wishes' && <WishlistPage />}
             {tab === 'settings' && <SettingsPage />}

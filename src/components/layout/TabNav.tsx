@@ -1,7 +1,7 @@
-import { BookOpen, LayoutDashboard, ListChecks, Settings, Sparkles } from 'lucide-react';
+import { BookOpen, LayoutDashboard, ListChecks, Repeat, Settings, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type AppTab = 'dashboard' | 'todo' | 'journal' | 'wishes' | 'settings';
+export type AppTab = 'dashboard' | 'todo' | 'habit' | 'journal' | 'wishes' | 'settings';
 
 export const TABS: {
   id: AppTab;
@@ -10,6 +10,7 @@ export const TABS: {
 }[] = [
   { id: 'dashboard', label: '撲滿', icon: LayoutDashboard },
   { id: 'todo', label: '待辦', icon: ListChecks },
+  { id: 'habit', label: '習慣', icon: Repeat },
   { id: 'journal', label: '日記', icon: BookOpen },
   { id: 'wishes', label: '願望', icon: Sparkles },
   { id: 'settings', label: '設定', icon: Settings },

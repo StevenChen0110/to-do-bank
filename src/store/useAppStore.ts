@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type {
   AppData,
   AppSettings,
+  Habit,
   JournalEntry,
   LogTaskOptions,
   Task,
@@ -11,6 +12,7 @@ import type {
   Wish,
 } from '../types';
 import { localDateString } from '../lib/dates';
+import { dueToday } from '../lib/habits';
 import {
   clearJournalCredit,
   DIARY_TASK_TITLE,
@@ -21,8 +23,18 @@ import { loadAppData, saveAppData } from '../lib/storage';
 
 type PersistableState = Pick<
   AppData,
-  'tasks' | 'wishes' | 'transactions' | 'journalEntries' | 'settings'
+  'tasks' | 'wishes' | 'transactions' | 'journalEntries' | 'habits' | 'settings'
 >;
+
+interface AddHabitInput {
+  title: string;
+  cue?: string;
+  category?: TaskCategory;
+  reward?: number;
+  weekdays?: number[];
+  startDate?: string;
+  targetDays?: number;
+}
 
 interface AppStore extends PersistableState {
   _hydrated: boolean;
@@ -56,6 +68,17 @@ interface AppStore extends PersistableState {
   setPinnedWishId: (wishId: string | null) => void;
   addCategory: (label: string) => void;
   deleteCategory: (id: string) => void;
+  addHabit: (input: AddHabitInput) => void;
+  updateHabit: (
+    id: string,
+    patch: Partial<
+      Pick<Habit, 'title' | 'cue' | 'category' | 'reward' | 'weekdays' | 'targetDays' | 'active'>
+    >,
+  ) => void;
+  archiveHabit: (id: string) => void;
+  deleteHabit: (id: string) => void;
+  /** Create today's missing habit task instances. Idempotent. */
+  materializeHabitTasks: (dateKey: string) => void;
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -67,6 +90,7 @@ function persistPayload(state: PersistableState): AppData {
     wishes: state.wishes,
     transactions: state.transactions,
     journalEntries: state.journalEntries,
+    habits: state.habits,
     settings: state.settings,
   };
 }
@@ -94,6 +118,7 @@ function toPersistable(state: AppStore): PersistableState {
     wishes: state.wishes,
     transactions: state.transactions,
     journalEntries: state.journalEntries,
+    habits: state.habits,
     settings: state.settings,
   };
 }
@@ -188,6 +213,7 @@ export const useAppStore = create<AppStore>((set) => ({
   wishes: [],
   transactions: [],
   journalEntries: [],
+  habits: [],
   settings: normalizeSettings(undefined),
   _hydrated: false,
 
@@ -198,6 +224,7 @@ export const useAppStore = create<AppStore>((set) => ({
       wishes: data.wishes,
       transactions: data.transactions,
       journalEntries: data.journalEntries,
+      habits: data.habits,
       settings: data.settings,
       _hydrated: true,
     });
@@ -549,6 +576,98 @@ export const useAppStore = create<AppStore>((set) => ({
           ),
         },
       };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  addHabit: (input) => {
+    const title = input.title.trim().slice(0, 60);
+    if (!title) return;
+    const now = new Date().toISOString();
+    set((state) => {
+      const habit: Habit = {
+        id: uuidv4(),
+        title,
+        cue: (input.cue ?? '').trim().slice(0, 60),
+        category: input.category ?? 'other',
+        reward: input.reward ?? state.settings.smallTaskReward,
+        weekdays:
+          input.weekdays && input.weekdays.length > 0
+            ? [...input.weekdays].sort()
+            : [0, 1, 2, 3, 4, 5, 6],
+        startDate: input.startDate ?? localDateString(),
+        targetDays: input.targetDays ?? 21,
+        active: true,
+        createdAt: now,
+        archivedAt: null,
+      };
+      const next: AppStore = { ...state, habits: [...state.habits, habit] };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  updateHabit: (id, patch) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        habits: state.habits.map((h) => (h.id === id ? { ...h, ...patch } : h)),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  archiveHabit: (id) => {
+    const now = new Date().toISOString();
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        habits: state.habits.map((h) =>
+          h.id === id ? { ...h, active: false, archivedAt: now } : h,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  deleteHabit: (id) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        habits: state.habits.filter((h) => h.id !== id),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  materializeHabitTasks: (dateKey) => {
+    set((state) => {
+      const already = new Set(
+        state.tasks
+          .filter((t) => t.source?.type === 'habit' && t.scheduledDate === dateKey)
+          .map((t) => t.source!.refId),
+      );
+      const now = new Date().toISOString();
+      const created: Task[] = [];
+      for (const h of state.habits) {
+        if (!dueToday(h, dateKey) || already.has(h.id)) continue;
+        created.push({
+          id: uuidv4(),
+          title: h.title,
+          category: h.category,
+          reward: h.reward,
+          scheduledDate: dateKey,
+          completedAt: null,
+          createdAt: now,
+          source: { type: 'habit', refId: h.id },
+        });
+      }
+      if (created.length === 0) return state;
+      const next: AppStore = { ...state, tasks: [...created, ...state.tasks] };
       schedulePersist(toPersistable(next));
       return next;
     });

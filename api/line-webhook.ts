@@ -30,6 +30,7 @@ const EMPTY: AppData = {
   wishes: [],
   transactions: [],
   journalEntries: [],
+  habits: [],
   settings: {
     smallTaskReward: 10,
     bigTaskReward: 30,
@@ -40,9 +41,11 @@ const EMPTY: AppData = {
   },
 };
 
+interface TaskSource { type: 'habit' | 'project'; refId: string; }
 interface Task {
   id: string; title: string; category: string; reward: number;
   scheduledDate: string; completedAt: string | null; createdAt: string;
+  source?: TaskSource;
 }
 interface Wish {
   id: string; title: string; cost: number; createdAt: string; redeemedAt: string | null;
@@ -51,6 +54,11 @@ interface Transaction {
   id: string; type: string; amount: number;
   taskId?: string; wishId?: string; createdAt: string; note?: string;
 }
+interface Habit {
+  id: string; title: string; cue: string; category: string; reward: number;
+  weekdays: number[]; startDate: string; targetDays: number;
+  active: boolean; createdAt: string; archivedAt: string | null;
+}
 interface Settings {
   smallTaskReward: number; bigTaskReward: number; soundEnabled: boolean;
   diaryCountsAsTask: boolean; pinnedWishId: string | null;
@@ -58,7 +66,8 @@ interface Settings {
 }
 interface AppData {
   version: 1; tasks: Task[]; wishes: Wish[];
-  transactions: Transaction[]; journalEntries: unknown[]; settings: Settings;
+  transactions: Transaction[]; journalEntries: unknown[];
+  habits: Habit[]; settings: Settings;
 }
 
 async function load(userId: string): Promise<AppData> {
@@ -72,8 +81,58 @@ async function load(userId: string): Promise<AppData> {
     wishes: d.wishes ?? [],
     transactions: d.transactions ?? [],
     journalEntries: d.journalEntries ?? [],
+    habits: d.habits ?? [],
     settings: { ...EMPTY.settings, ...(d.settings ?? {}) },
   };
+}
+
+/** yyyy-MM-dd shifted by delta days (TZ-stable via UTC). */
+function shiftDay(key: string, delta: number): string {
+  const d = new Date(`${key}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+function weekdayOf(key: string): number {
+  return new Date(`${key}T00:00:00Z`).getUTCDay();
+}
+
+/** Create today's missing habit task instances (mutates data). Idempotent. */
+function materializeHabits(data: AppData, today: string): boolean {
+  const weekday = weekdayOf(today);
+  const existing = new Set(
+    data.tasks
+      .filter((t) => t.source?.type === 'habit' && t.scheduledDate === today)
+      .map((t) => t.source!.refId),
+  );
+  const now = new Date().toISOString();
+  let changed = false;
+  for (const h of data.habits) {
+    if (!h.active || today < h.startDate) continue;
+    if (!h.weekdays.includes(weekday) || existing.has(h.id)) continue;
+    data.tasks.unshift({
+      id: uuidv4(), title: h.title, category: h.category, reward: h.reward,
+      scheduledDate: today, completedAt: null, createdAt: now,
+      source: { type: 'habit', refId: h.id },
+    });
+    changed = true;
+  }
+  return changed;
+}
+
+function habitStreak(data: AppData, habitId: string, today: string): number {
+  const done = new Set(
+    data.tasks
+      .filter((t) => t.source?.type === 'habit' && t.source.refId === habitId && t.completedAt !== null)
+      .map((t) => t.scheduledDate),
+  );
+  let streak = 0;
+  let cur = done.has(today) ? today : shiftDay(today, -1);
+  while (done.has(cur)) {
+    streak += 1;
+    cur = shiftDay(cur, -1);
+  }
+  return streak;
 }
 
 async function save(userId: string, data: AppData): Promise<void> {
@@ -104,6 +163,10 @@ const HELP = `📖 To Do Bank 指令
 完成 [待辦] — 完成並入帳
 刪除 [待辦] — 刪除待辦
 待辦 — 今日待辦清單
+
+【習慣】
+習慣 — 今日習慣與連續天數
+習慣 新增 [名稱] — 建立每日習慣
 
 【願望】
 願望 [名稱] [金額] — 新增願望
@@ -149,6 +212,43 @@ async function handle(userId: string, text: string): Promise<string> {
   const now = new Date().toISOString();
   const bal = () => data.transactions.reduce((s, tx) => s + tx.amount, 0);
 
+  // ── 新增習慣 ────────────────────────────
+  if (t.startsWith('習慣 新增 ')) {
+    const title = t.slice(6).trim();
+    if (!title) return '請輸入習慣名稱，例如：習慣 新增 喝水';
+    const reward = data.settings.smallTaskReward;
+    data.habits.push({
+      id: uuidv4(), title: title.slice(0, 60), cue: '', category: 'other',
+      reward, weekdays: [0, 1, 2, 3, 4, 5, 6], startDate: today, targetDays: 21,
+      active: true, createdAt: now, archivedAt: null,
+    });
+    materializeHabits(data, today);
+    await save(userId, data);
+    return `🔁 已建立每日習慣：${title}\n每天到「待辦」打勾，完成 +${fmt(reward)} 入帳`;
+  }
+
+  // ── 今日習慣 ────────────────────────────
+  if (t === '習慣') {
+    const list = data.habits.filter((h) => h.active);
+    if (list.length === 0) {
+      return '🔁 還沒有習慣\n\n輸入「習慣 新增 [名稱]」來建立每日習慣';
+    }
+    if (materializeHabits(data, today)) await save(userId, data);
+    const weekday = weekdayOf(today);
+    const lines = ['🔁 今日習慣', ''];
+    for (const h of list) {
+      const due = today >= h.startDate && h.weekdays.includes(weekday);
+      const task = data.tasks.find(
+        (x) => x.source?.type === 'habit' && x.source.refId === h.id && x.scheduledDate === today,
+      );
+      const doneToday = task?.completedAt != null;
+      const mark = !due ? '😴' : doneToday ? '✅' : '⭕';
+      lines.push(`${mark} ${h.title}　🔥${habitStreak(data, h.id, today)}`);
+    }
+    lines.push('', '完成請用：完成 [習慣名稱]');
+    return lines.join('\n');
+  }
+
   // ── 新增大任務 ──────────────────────────
   if (t.startsWith('新增大 ')) {
     const title = t.slice(4).trim();
@@ -178,6 +278,7 @@ async function handle(userId: string, text: string): Promise<string> {
   // ── 完成待辦 ────────────────────────────
   if (t.startsWith('完成 ') || t.startsWith('✅ ')) {
     const kw = t.startsWith('完成 ') ? t.slice(3).trim() : t.slice(2).trim();
+    materializeHabits(data, today); // surface today's habit tasks so they're completable
     const pending = data.tasks.filter(t => t.completedAt === null && t.scheduledDate === today);
     const match = pending.find(t => t.title.includes(kw));
     if (!match) {
@@ -214,6 +315,7 @@ async function handle(userId: string, text: string): Promise<string> {
 
   // ── 今日待辦 ────────────────────────────
   if (['待辦', '今日', '代辦'].includes(t)) {
+    if (materializeHabits(data, today)) await save(userId, data);
     const todayTasks = data.tasks.filter(t => t.scheduledDate === today);
     if (todayTasks.length === 0)
       return `📋 今日（${today}）還沒有待辦\n\n輸入「新增 [待辦名稱]」來新增`;
