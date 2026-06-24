@@ -1,35 +1,25 @@
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { addDays, format, parse } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
-import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
-import type { TaskPriority } from '@/types';
+import { CalendarDays, ClipboardList, Plus } from 'lucide-react';
 import { localDateString } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { formatPinnedGoalNarrative, isPinnedWishActive } from '@/lib/pinnedWish';
 import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
-import { PRIORITY_META, PRIORITY_ORDER } from '@/lib/priority';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
-import { allCategories, labelForCategory } from '@/lib/categories';
+import { allCategories } from '@/lib/categories';
 import { QuickAddInput } from '@/components/todo/QuickAddInput';
-import { PriorityBoard } from '@/components/todo/PriorityBoard';
 import { TaskList } from '@/components/todo/TaskList';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type FilterStatus = 'all' | 'pending' | 'completed';
-type TimeRange = 'all' | '3d' | '7d' | '30d' | 'custom';
-type ViewMode = 'date' | 'category' | 'priority';
-
-const STATUS_OPTIONS: { id: Exclude<FilterStatus, 'all'>; label: string }[] = [
-  { id: 'pending', label: '未完成' },
-  { id: 'completed', label: '已完成' },
-];
+type Mode = 'plan' | 'log';
+type TimeRange = 'all' | '7d' | '30d' | 'custom';
 
 const TIME_OPTIONS: { id: TimeRange; label: string }[] = [
   { id: 'all', label: '全部' },
-  { id: '3d', label: '前三天' },
   { id: '7d', label: '過去一週' },
   { id: '30d', label: '過去一個月' },
   { id: 'custom', label: '自訂' },
@@ -37,23 +27,22 @@ const TIME_OPTIONS: { id: TimeRange; label: string }[] = [
 
 export function TodoLogPage() {
   const todayKey = localDateString();
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [quickAddDate, setQuickAddDate] = useState(todayKey);
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [mode, setMode] = useState<Mode>('plan');
   const [filterCat, setFilterCat] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('date');
+
+  // 計畫
+  const [planDate, setPlanDate] = useState(todayKey);
+  // 紀錄 quick-log
+  const [logTitle, setLogTitle] = useState('');
+  // 紀錄 time range
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
-  const [quickTitle, setQuickTitle] = useState('');
-  const [quickPriority, setQuickPriority] = useState<TaskPriority>('medium');
 
   const tasks = useAppStore((s) => s.tasks);
   const deleteTask = useAppStore((s) => s.deleteTask);
   const completeTask = useAppStore((s) => s.completeTask);
-  const addPendingTask = useAppStore((s) => s.addPendingTask);
-  const reorderTasks = useAppStore((s) => s.reorderTasks);
+  const logCompletedTask = useAppStore((s) => s.logCompletedTask);
   const settings = useAppStore((s) => s.settings);
   const wishes = useAppStore((s) => s.wishes);
   const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
@@ -65,14 +54,13 @@ export function TodoLogPage() {
     [customCategories],
   );
 
-  // Resolve the effective date window from the active time range.
-  const { effFrom, effTo } = useMemo(() => {
-    if (timeRange === 'custom') return { effFrom: customFrom, effTo: customTo };
-    if (timeRange === 'all') return { effFrom: '', effTo: '' };
-    const days = timeRange === '3d' ? 3 : timeRange === '7d' ? 7 : 30;
-    const today = parse(todayKey, 'yyyy-MM-dd', new Date());
-    return { effFrom: localDateString(addDays(today, -(days - 1))), effTo: todayKey };
-  }, [timeRange, customFrom, customTo, todayKey]);
+  const depositDetail = (): string | undefined => {
+    if (!isPinnedWishActive(wishes, pinnedWishId)) return undefined;
+    const pinned = wishes.find((w) => w.id === pinnedWishId);
+    if (!pinned) return undefined;
+    const bal = useAppStore.getState().transactions.reduce((s, tx) => s + tx.amount, 0);
+    return formatPinnedGoalNarrative(pinned, bal);
+  };
 
   const handleComplete = (taskId: string) => {
     unlockAudioFromGesture();
@@ -80,16 +68,7 @@ export function TodoLogPage() {
     if (!task || task.completedAt !== null) return;
     completeTask(taskId);
     if (settings.soundEnabled) playDepositChime();
-
-    let detail: string | undefined;
-    if (isPinnedWishActive(wishes, pinnedWishId)) {
-      const pinned = wishes.find((w) => w.id === pinnedWishId);
-      if (pinned) {
-        const bal = useAppStore.getState().transactions.reduce((s, tx) => s + tx.amount, 0);
-        detail = formatPinnedGoalNarrative(pinned, bal);
-      }
-    }
-    showToast(`+NT$${task.reward} 已入帳`, 'success', detail);
+    showToast(`+NT$${task.reward} 已入帳`, 'success', depositDetail());
   };
 
   const handleDelete = (taskId: string) => {
@@ -103,387 +82,279 @@ export function TodoLogPage() {
     );
   };
 
-  const filtered = useMemo(
-    () =>
-      tasks.filter((t) => {
-        if (filterCat !== 'all' && t.category !== filterCat) return false;
-        if (filterStatus === 'pending' && t.completedAt !== null) return false;
-        if (filterStatus === 'completed' && t.completedAt === null) return false;
-        if (effFrom && t.scheduledDate < effFrom) return false;
-        if (effTo && t.scheduledDate > effTo) return false;
-        return true;
-      }),
-    [tasks, filterCat, filterStatus, effFrom, effTo],
-  );
-
-  const dateGroups = useMemo(() => {
-    const map = new Map<string, typeof tasks>();
-    for (const task of filtered) {
-      if (!map.has(task.scheduledDate)) map.set(task.scheduledDate, []);
-      map.get(task.scheduledDate)!.push(task);
-    }
-    return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
-  }, [filtered]);
-
-  const categoryGroups = useMemo(() => {
-    const map = new Map<string, typeof tasks>();
-    for (const task of filtered) {
-      if (!map.has(task.category)) map.set(task.category, []);
-      map.get(task.category)!.push(task);
-    }
-    return [...map.entries()].sort(([, a], [, b]) => b.length - a.length);
-  }, [filtered]);
-
-  const pendingFiltered = useMemo(
-    () => filtered.filter((t) => t.completedAt === null),
-    [filtered],
-  );
-
-  const submitQuick = () => {
-    const title = quickTitle.trim();
+  // 紀錄：補記剛完成的事 → 立即入帳
+  const submitLog = () => {
+    const title = logTitle.trim();
     if (!title) return;
-    addPendingTask(title, filterCat !== 'all' ? filterCat : 'other', todayKey, {
-      priority: quickPriority,
-    });
-    setQuickTitle('');
+    unlockAudioFromGesture();
+    const created = logCompletedTask(title, filterCat !== 'all' ? filterCat : 'other', todayKey);
+    if (!created) return;
+    if (settings.soundEnabled) playDepositChime();
+    showToast(`+NT$${created.reward} 已入帳`, 'success', depositDetail());
+    setLogTitle('');
   };
 
-  function labelForDate(dk: string) {
+  const catFiltered = useMemo(
+    () => (filterCat === 'all' ? tasks : tasks.filter((t) => t.category === filterCat)),
+    [tasks, filterCat],
+  );
+
+  // 計畫：未完成，依日期分組（逾期→今日→未來）
+  const planGroups = useMemo(() => {
+    const pending = catFiltered.filter((t) => t.completedAt === null);
+    const map = new Map<string, typeof tasks>();
+    for (const t of pending) {
+      if (!map.has(t.scheduledDate)) map.set(t.scheduledDate, []);
+      map.get(t.scheduledDate)!.push(t);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [catFiltered]);
+
+  // 紀錄：已完成，套時間範圍，依日期新到舊
+  const logGroups = useMemo(() => {
+    let from = '';
+    let to = '';
+    if (timeRange === 'custom') {
+      from = customFrom;
+      to = customTo;
+    } else if (timeRange !== 'all') {
+      const days = timeRange === '7d' ? 7 : 30;
+      from = localDateString(addDays(parse(todayKey, 'yyyy-MM-dd', new Date()), -(days - 1)));
+      to = todayKey;
+    }
+    const done = catFiltered.filter((t) => {
+      if (t.completedAt === null) return false;
+      if (from && t.scheduledDate < from) return false;
+      if (to && t.scheduledDate > to) return false;
+      return true;
+    });
+    const map = new Map<string, typeof tasks>();
+    for (const t of done) {
+      if (!map.has(t.scheduledDate)) map.set(t.scheduledDate, []);
+      map.get(t.scheduledDate)!.push(t);
+    }
+    return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
+  }, [catFiltered, timeRange, customFrom, customTo, todayKey]);
+
+  function dateLabel(dk: string): string {
     if (dk === todayKey) return '今日';
+    const tomorrow = localDateString(addDays(parse(todayKey, 'yyyy-MM-dd', new Date()), 1));
+    const yesterday = localDateString(addDays(parse(todayKey, 'yyyy-MM-dd', new Date()), -1));
+    if (dk === tomorrow) return '明天';
+    if (dk === yesterday) return '昨天';
     return format(parse(dk, 'yyyy-MM-dd', new Date()), 'M月d日 EEEE', { locale: zhTW });
   }
 
-  function earnedFor(group: typeof tasks) {
-    return group.filter((t) => t.completedAt !== null).reduce((s, t) => s + t.reward, 0);
-  }
-
-  const isOpen = (key: string, dflt: boolean) => openMap[key] ?? dflt;
-  const toggleOpen = (key: string, dflt: boolean) =>
-    setOpenMap((m) => ({ ...m, [key]: !(m[key] ?? dflt) }));
+  const earnedFor = (group: typeof tasks) =>
+    group.filter((t) => t.completedAt !== null).reduce((s, t) => s + t.reward, 0);
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── 新增存款 ──────────────────────────────── */}
-      <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
-        <button
-          type="button"
-          className="flex w-full items-center justify-between"
-          onClick={() => setQuickAddOpen((v) => !v)}
-          aria-expanded={quickAddOpen}
-        >
-          <span className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <Plus className="h-4 w-4" />
-            新增存款
-          </span>
-          {quickAddOpen ? (
-            <ChevronUp className="h-4 w-4 text-primary/60" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-primary/60" />
-          )}
-        </button>
-
-        {quickAddOpen && (
-          <div className="mt-3 flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <label className="shrink-0 text-xs text-muted-foreground">記帳日期</label>
-              <Input
-                type="date"
-                value={quickAddDate}
-                max={todayKey}
-                onChange={(e) => setQuickAddDate(e.target.value || todayKey)}
-                className="h-9 flex-1"
-              />
-            </div>
-            <QuickAddInput scheduledDate={quickAddDate} />
-          </div>
-        )}
-      </section>
-
-      {/* ── 待辦記錄 ──────────────────────────────── */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold">待辦記錄</span>
-        <div className="h-px flex-1 bg-border" />
+      {/* 模式切換 */}
+      <div className="flex gap-2 rounded-xl border border-border bg-card p-1" role="group" aria-label="模式">
+        {(
+          [
+            { id: 'plan', label: '計畫', icon: ClipboardList, hint: '安排要做的事' },
+            { id: 'log', label: '紀錄', icon: CalendarDays, hint: '記下做過的事' },
+          ] as const
+        ).map(({ id, label, icon: Icon, hint }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setMode(id)}
+            aria-pressed={mode === id}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              mode === id
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+            <span className="hidden text-[10px] font-normal opacity-70 sm:inline">· {hint}</span>
+          </button>
+        ))}
       </div>
 
-      {/* 篩選 */}
-      <section className="flex flex-col gap-3">
-        {/* 時間範圍 */}
-        <div className="flex flex-wrap gap-2" role="group" aria-label="時間範圍">
-          {TIME_OPTIONS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTimeRange(id)}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                timeRange === id
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-              )}
-              aria-pressed={timeRange === id}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* 分類篩選（兩模式共用） */}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="分類篩選">
+        {categoryOptions.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setFilterCat(id)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              filterCat === id
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
+            )}
+            aria-pressed={filterCat === id}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-        {/* 自訂日期範圍 */}
-        {timeRange === 'custom' && (
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 text-xs text-muted-foreground">從</span>
-            <Input
-              type="date"
-              value={customFrom}
-              max={customTo || todayKey}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="h-8 flex-1 text-xs"
-            />
-            <span className="shrink-0 text-xs text-muted-foreground">到</span>
-            <Input
-              type="date"
-              value={customTo}
-              min={customFrom}
-              max={todayKey}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="h-8 flex-1 text-xs"
-            />
-          </div>
-        )}
-
-        {/* 狀態 + 分類 chips */}
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="篩選條件">
-          {STATUS_OPTIONS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setFilterStatus((prev) => (prev === id ? 'all' : id))}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                filterStatus === id
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-              )}
-              aria-pressed={filterStatus === id}
-            >
-              {label}
-            </button>
-          ))}
-
-          <span className="h-4 self-center border-l border-border" aria-hidden />
-
-          {categoryOptions.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setFilterCat(id)}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                filterCat === id
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-              )}
-              aria-pressed={filterCat === id}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* 顯示方式 */}
-        <div className="flex gap-2" role="group" aria-label="顯示方式">
-          {(
-            [
-              { id: 'date', label: '按日期' },
-              { id: 'category', label: '按分類' },
-              { id: 'priority', label: '優先級' },
-            ] as const
-          ).map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setViewMode(id)}
-              className={cn(
-                'flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
-                viewMode === id
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-card text-muted-foreground hover:text-foreground',
-              )}
-              aria-pressed={viewMode === id}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* ── 清單 ──────────────────────────────────── */}
-      {viewMode === 'priority' ? (
-        <div className="flex flex-col gap-3">
-          {/* 快速新增（依優先級） */}
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-            <div className="flex items-center gap-2" role="group" aria-label="優先級">
-              {PRIORITY_ORDER.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setQuickPriority(p)}
-                  aria-pressed={quickPriority === p}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-xs font-medium transition-colors',
-                    quickPriority === p
-                      ? PRIORITY_META[p].chip
-                      : 'border-border text-muted-foreground',
-                  )}
-                >
-                  <span className={cn('h-1.5 w-1.5 rounded-full', PRIORITY_META[p].dot)} />
-                  {PRIORITY_META[p].label}
-                </button>
-              ))}
+      {mode === 'plan' ? (
+        <>
+          {/* 安排待辦 */}
+          <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-primary">
+                <Plus className="h-4 w-4" />
+                安排待辦
+              </span>
+              <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+                安排到
+                <Input
+                  type="date"
+                  value={planDate}
+                  onChange={(e) => setPlanDate(e.target.value || todayKey)}
+                  className="h-8 w-[8.5rem] text-xs"
+                  aria-label="安排日期"
+                />
+              </span>
             </div>
-            <div className="mt-2 flex gap-2">
+            <QuickAddInput scheduledDate={planDate} />
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              安排好之後到日期分組打勾完成即入帳。任務卡上的標籤可調優先級。
+            </p>
+          </section>
+
+          {/* 待辦清單（依日期） */}
+          {planGroups.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+              目前沒有待安排的事。用上方「安排待辦」加入今天或未來要做的事。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {planGroups.map(([dk, list]) => {
+                const overdue = dk < todayKey;
+                return (
+                  <section key={dk} className="rounded-xl border border-border bg-card p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3
+                        className={cn(
+                          'text-sm font-semibold',
+                          overdue && 'text-amber-600',
+                        )}
+                      >
+                        {overdue && '逾期 · '}
+                        {dateLabel(dk)}
+                      </h3>
+                      <span className="text-xs text-muted-foreground">{list.length} 件</span>
+                    </div>
+                    <TaskList tasks={list} onDelete={handleDelete} onComplete={handleComplete} />
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* 補記剛完成 */}
+          <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-primary">
+              <Plus className="h-4 w-4" />
+              補記剛完成的事
+            </div>
+            <div className="flex gap-2">
               <Input
-                value={quickTitle}
-                onChange={(e) => setQuickTitle(e.target.value)}
+                value={logTitle}
+                onChange={(e) => setLogTitle(e.target.value)}
                 onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                     e.preventDefault();
-                    submitQuick();
+                    submitLog();
                   }
                 }}
-                placeholder="快速新增待辦（記今日）"
+                placeholder="剛做了什麼？記下立即入帳"
                 maxLength={200}
-                className="min-h-10 flex-1"
-                aria-label="快速新增待辦"
+                className="min-h-11 flex-1"
+                aria-label="補記完成的事"
               />
               <Button
                 type="button"
                 size="icon"
-                className="h-10 w-10 shrink-0"
-                onClick={submitQuick}
-                disabled={!quickTitle.trim()}
-                aria-label="新增待辦"
+                className="h-11 w-11 shrink-0"
+                onClick={submitLog}
+                disabled={!logTitle.trim()}
+                aria-label="記錄並入帳"
               >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-          </div>
+          </section>
 
-          {pendingFiltered.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              目前沒有未完成待辦。用上方快速新增，或調整篩選條件。
+          {/* 時間範圍 */}
+          <div className="flex flex-wrap gap-2" role="group" aria-label="時間範圍">
+            {TIME_OPTIONS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTimeRange(id)}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  timeRange === id
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                )}
+                aria-pressed={timeRange === id}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {timeRange === 'custom' && (
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs text-muted-foreground">從</span>
+              <Input
+                type="date"
+                value={customFrom}
+                max={customTo || todayKey}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-8 flex-1 text-xs"
+              />
+              <span className="shrink-0 text-xs text-muted-foreground">到</span>
+              <Input
+                type="date"
+                value={customTo}
+                min={customFrom}
+                max={todayKey}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-8 flex-1 text-xs"
+              />
+            </div>
+          )}
+
+          {/* 完成時間軸 */}
+          {logGroups.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+              這段時間還沒有完成記錄。完成「計畫」裡的待辦，或用上方補記。
             </p>
           ) : (
-            <>
-              <p className="px-1 text-[11px] text-muted-foreground">
-                長按 <span className="font-medium">⠿</span> 拖曳排序；跨區拖曳可改優先級
-              </p>
-              <PriorityBoard
-                tasks={pendingFiltered}
-                onComplete={handleComplete}
-                onDelete={handleDelete}
-                onReorder={reorderTasks}
-              />
-            </>
+            <div className="flex flex-col gap-3">
+              {logGroups.map(([dk, list]) => {
+                const earned = earnedFor(list);
+                return (
+                  <section key={dk} className="rounded-xl border border-border bg-card p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">{dateLabel(dk)}</h3>
+                      <span className="text-xs font-medium text-primary">
+                        +{formatCurrency(earned)}
+                      </span>
+                    </div>
+                    <TaskList tasks={list} onDelete={handleDelete} onComplete={handleComplete} />
+                  </section>
+                );
+              })}
+            </div>
           )}
-        </div>
-      ) : filtered.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-          {tasks.length === 0
-            ? '尚無存款記錄。點上方「新增存款」，打勾完成後自動入帳。'
-            : '目前篩選條件下無記錄。'}
-        </p>
-      ) : viewMode === 'date' ? (
-        <div className="flex flex-col gap-3">
-          {dateGroups.map(([dk, dayTasks]) => {
-            const earned = earnedFor(dayTasks);
-            const done = dayTasks.filter((t) => t.completedAt !== null).length;
-            const open = isOpen(dk, dk === todayKey);
-            return (
-              <CollapsibleGroup
-                key={dk}
-                title={labelForDate(dk)}
-                open={open}
-                onToggle={() => toggleOpen(dk, dk === todayKey)}
-                meta={
-                  <>
-                    <span className="text-muted-foreground">
-                      {done}/{dayTasks.length}
-                    </span>
-                    {earned > 0 && (
-                      <span className="font-medium text-primary">+{formatCurrency(earned)}</span>
-                    )}
-                  </>
-                }
-              >
-                <TaskList
-                  tasks={dayTasks}
-                  onDelete={handleDelete}
-                  onComplete={handleComplete}
-                  emptyMessage="此日期尚無記錄。"
-                />
-              </CollapsibleGroup>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {categoryGroups.map(([cat, catTasks]) => {
-            const earned = earnedFor(catTasks);
-            const open = isOpen(`cat:${cat}`, true);
-            return (
-              <CollapsibleGroup
-                key={cat}
-                title={labelForCategory(cat, customCategories)}
-                open={open}
-                onToggle={() => toggleOpen(`cat:${cat}`, true)}
-                meta={
-                  <>
-                    <span className="text-muted-foreground">{catTasks.length} 筆</span>
-                    {earned > 0 && (
-                      <span className="font-medium text-primary">+{formatCurrency(earned)}</span>
-                    )}
-                  </>
-                }
-              >
-                <TaskList tasks={catTasks} onDelete={handleDelete} onComplete={handleComplete} />
-              </CollapsibleGroup>
-            );
-          })}
-        </div>
+        </>
       )}
     </div>
-  );
-}
-
-interface CollapsibleGroupProps {
-  title: string;
-  meta: ReactNode;
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}
-
-function CollapsibleGroup({ title, meta, open, onToggle, children }: CollapsibleGroupProps) {
-  return (
-    <section className="rounded-xl border border-border bg-card">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 p-4"
-      >
-        <span className="flex items-center gap-2">
-          <ChevronDown
-            className={cn(
-              'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-              !open && '-rotate-90',
-            )}
-          />
-          <span className="text-sm font-semibold">{title}</span>
-        </span>
-        <span className="flex items-center gap-2 text-xs">{meta}</span>
-      </button>
-      {open && <div className="px-4 pb-4">{children}</div>}
-    </section>
   );
 }
