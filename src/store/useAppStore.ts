@@ -60,6 +60,10 @@ interface AppStore extends PersistableState {
   completeTask: (taskId: string) => void;
   deleteTask: (taskId: string) => void;
   setTaskPriority: (taskId: string, priority: TaskPriority) => void;
+  /** Apply drag-reorder results: new priority + order for each task. */
+  reorderTasks: (
+    updates: { id: string; priority: TaskPriority; order: number }[],
+  ) => void;
   saveJournalContent: (
     dateKey: string,
     content: string,
@@ -361,6 +365,22 @@ export const useAppStore = create<AppStore>((set) => ({
         tasks: state.tasks.map((t) =>
           t.id === taskId ? { ...t, priority } : t,
         ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  reorderTasks: (updates) => {
+    if (updates.length === 0) return;
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) => {
+          const u = byId.get(t.id);
+          return u ? { ...t, priority: u.priority, order: u.order } : t;
+        }),
       };
       schedulePersist(toPersistable(next));
       return next;

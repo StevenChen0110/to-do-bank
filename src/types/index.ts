@@ -26,6 +26,8 @@ export interface Task {
   createdAt: string;
   source?: TaskSource;
   priority?: TaskPriority;
+  /** Manual sort order within a priority band (lower = higher). */
+  order?: number;
 }
 
 export interface Habit {

@@ -7,11 +7,12 @@ import { localDateString } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { formatPinnedGoalNarrative, isPinnedWishActive } from '@/lib/pinnedWish';
 import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
-import { PRIORITY_META, PRIORITY_ORDER, taskPriority } from '@/lib/priority';
+import { PRIORITY_META, PRIORITY_ORDER } from '@/lib/priority';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
 import { allCategories, labelForCategory } from '@/lib/categories';
 import { QuickAddInput } from '@/components/todo/QuickAddInput';
+import { PriorityBoard } from '@/components/todo/PriorityBoard';
 import { TaskList } from '@/components/todo/TaskList';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ export function TodoLogPage() {
   const deleteTask = useAppStore((s) => s.deleteTask);
   const completeTask = useAppStore((s) => s.completeTask);
   const addPendingTask = useAppStore((s) => s.addPendingTask);
+  const reorderTasks = useAppStore((s) => s.reorderTasks);
   const settings = useAppStore((s) => s.settings);
   const wishes = useAppStore((s) => s.wishes);
   const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
@@ -132,15 +134,8 @@ export function TodoLogPage() {
     return [...map.entries()].sort(([, a], [, b]) => b.length - a.length);
   }, [filtered]);
 
-  const priorityGroups = useMemo(
-    () =>
-      PRIORITY_ORDER.map((p) => {
-        const list = filtered
-          .filter((t) => taskPriority(t.priority) === p)
-          // pending first, completed sink to the bottom
-          .sort((a, b) => Number(a.completedAt !== null) - Number(b.completedAt !== null));
-        return [p, list] as const;
-      }),
+  const pendingFiltered = useMemo(
+    () => filtered.filter((t) => t.completedAt === null),
     [filtered],
   );
 
@@ -373,23 +368,22 @@ export function TodoLogPage() {
             </div>
           </div>
 
-          {filtered.length === 0 ? (
+          {pendingFiltered.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              目前沒有待辦。用上方快速新增，或調整篩選條件。
+              目前沒有未完成待辦。用上方快速新增，或調整篩選條件。
             </p>
           ) : (
-            priorityGroups.map(([p, list]) =>
-              list.length === 0 ? null : (
-                <section key={p} className="rounded-xl border border-border bg-card p-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <span className={cn('h-2.5 w-2.5 rounded-full', PRIORITY_META[p].dot)} />
-                    <h3 className="text-sm font-semibold">{PRIORITY_META[p].label}優先</h3>
-                    <span className="text-xs text-muted-foreground">{list.length}</span>
-                  </div>
-                  <TaskList tasks={list} onDelete={handleDelete} onComplete={handleComplete} />
-                </section>
-              ),
-            )
+            <>
+              <p className="px-1 text-[11px] text-muted-foreground">
+                長按 <span className="font-medium">⠿</span> 拖曳排序；跨區拖曳可改優先級
+              </p>
+              <PriorityBoard
+                tasks={pendingFiltered}
+                onComplete={handleComplete}
+                onDelete={handleDelete}
+                onReorder={reorderTasks}
+              />
+            </>
           )}
         </div>
       ) : filtered.length === 0 ? (
