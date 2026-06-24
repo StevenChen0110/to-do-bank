@@ -1,21 +1,25 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { addDays, format, parse } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import type { TaskPriority } from '@/types';
 import { localDateString } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { formatPinnedGoalNarrative, isPinnedWishActive } from '@/lib/pinnedWish';
 import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
+import { PRIORITY_META, PRIORITY_ORDER, taskPriority } from '@/lib/priority';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
 import { allCategories, labelForCategory } from '@/lib/categories';
 import { QuickAddInput } from '@/components/todo/QuickAddInput';
 import { TaskList } from '@/components/todo/TaskList';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 type FilterStatus = 'all' | 'pending' | 'completed';
 type TimeRange = 'all' | '3d' | '7d' | '30d' | 'custom';
+type ViewMode = 'date' | 'category' | 'priority';
 
 const STATUS_OPTIONS: { id: Exclude<FilterStatus, 'all'>; label: string }[] = [
   { id: 'pending', label: '未完成' },
@@ -36,15 +40,18 @@ export function TodoLogPage() {
   const [quickAddDate, setQuickAddDate] = useState(todayKey);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterCat, setFilterCat] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'date' | 'category'>('date');
+  const [viewMode, setViewMode] = useState<ViewMode>('date');
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickPriority, setQuickPriority] = useState<TaskPriority>('medium');
 
   const tasks = useAppStore((s) => s.tasks);
   const deleteTask = useAppStore((s) => s.deleteTask);
   const completeTask = useAppStore((s) => s.completeTask);
+  const addPendingTask = useAppStore((s) => s.addPendingTask);
   const settings = useAppStore((s) => s.settings);
   const wishes = useAppStore((s) => s.wishes);
   const pinnedWishId = useAppStore((s) => s.settings.pinnedWishId);
@@ -124,6 +131,27 @@ export function TodoLogPage() {
     }
     return [...map.entries()].sort(([, a], [, b]) => b.length - a.length);
   }, [filtered]);
+
+  const priorityGroups = useMemo(
+    () =>
+      PRIORITY_ORDER.map((p) => {
+        const list = filtered
+          .filter((t) => taskPriority(t.priority) === p)
+          // pending first, completed sink to the bottom
+          .sort((a, b) => Number(a.completedAt !== null) - Number(b.completedAt !== null));
+        return [p, list] as const;
+      }),
+    [filtered],
+  );
+
+  const submitQuick = () => {
+    const title = quickTitle.trim();
+    if (!title) return;
+    addPendingTask(title, filterCat !== 'all' ? filterCat : 'other', todayKey, {
+      priority: quickPriority,
+    });
+    setQuickTitle('');
+  };
 
   function labelForDate(dk: string) {
     if (dk === todayKey) return '今日';
@@ -268,27 +296,103 @@ export function TodoLogPage() {
 
         {/* 顯示方式 */}
         <div className="flex gap-2" role="group" aria-label="顯示方式">
-          {(['date', 'category'] as const).map((mode) => (
+          {(
+            [
+              { id: 'date', label: '按日期' },
+              { id: 'category', label: '按分類' },
+              { id: 'priority', label: '優先級' },
+            ] as const
+          ).map(({ id, label }) => (
             <button
-              key={mode}
+              key={id}
               type="button"
-              onClick={() => setViewMode(mode)}
+              onClick={() => setViewMode(id)}
               className={cn(
                 'flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
-                viewMode === mode
+                viewMode === id
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border bg-card text-muted-foreground hover:text-foreground',
               )}
-              aria-pressed={viewMode === mode}
+              aria-pressed={viewMode === id}
             >
-              {mode === 'date' ? '按日期' : '按分類'}
+              {label}
             </button>
           ))}
         </div>
       </section>
 
       {/* ── 清單 ──────────────────────────────────── */}
-      {filtered.length === 0 ? (
+      {viewMode === 'priority' ? (
+        <div className="flex flex-col gap-3">
+          {/* 快速新增（依優先級） */}
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+            <div className="flex items-center gap-2" role="group" aria-label="優先級">
+              {PRIORITY_ORDER.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setQuickPriority(p)}
+                  aria-pressed={quickPriority === p}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-xs font-medium transition-colors',
+                    quickPriority === p
+                      ? PRIORITY_META[p].chip
+                      : 'border-border text-muted-foreground',
+                  )}
+                >
+                  <span className={cn('h-1.5 w-1.5 rounded-full', PRIORITY_META[p].dot)} />
+                  {PRIORITY_META[p].label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Input
+                value={quickTitle}
+                onChange={(e) => setQuickTitle(e.target.value)}
+                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    submitQuick();
+                  }
+                }}
+                placeholder="快速新增待辦（記今日）"
+                maxLength={200}
+                className="min-h-10 flex-1"
+                aria-label="快速新增待辦"
+              />
+              <Button
+                type="button"
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                onClick={submitQuick}
+                disabled={!quickTitle.trim()}
+                aria-label="新增待辦"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {filtered.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              目前沒有待辦。用上方快速新增，或調整篩選條件。
+            </p>
+          ) : (
+            priorityGroups.map(([p, list]) =>
+              list.length === 0 ? null : (
+                <section key={p} className="rounded-xl border border-border bg-card p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className={cn('h-2.5 w-2.5 rounded-full', PRIORITY_META[p].dot)} />
+                    <h3 className="text-sm font-semibold">{PRIORITY_META[p].label}優先</h3>
+                    <span className="text-xs text-muted-foreground">{list.length}</span>
+                  </div>
+                  <TaskList tasks={list} onDelete={handleDelete} onComplete={handleComplete} />
+                </section>
+              ),
+            )
+          )}
+        </div>
+      ) : filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
           {tasks.length === 0
             ? '尚無存款記錄。點上方「新增存款」，打勾完成後自動入帳。'

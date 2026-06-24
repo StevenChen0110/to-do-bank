@@ -12,6 +12,7 @@ import type {
   ProjectTemplate,
   Task,
   TaskCategory,
+  TaskPriority,
   Transaction,
   Wish,
 } from '../types';
@@ -58,6 +59,7 @@ interface AppStore extends PersistableState {
   ) => Task | null;
   completeTask: (taskId: string) => void;
   deleteTask: (taskId: string) => void;
+  setTaskPriority: (taskId: string, priority: TaskPriority) => void;
   saveJournalContent: (
     dateKey: string,
     content: string,
@@ -286,6 +288,7 @@ export const useAppStore = create<AppStore>((set) => ({
         scheduledDate,
         completedAt: null,
         createdAt: now,
+        priority: options?.priority,
       };
       createdTask = task;
       const next: AppStore = { ...state, tasks: [task, ...state.tasks] };
@@ -346,6 +349,19 @@ export const useAppStore = create<AppStore>((set) => ({
       if (!next) {
         return state;
       }
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  setTaskPriority: (taskId, priority) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === taskId ? { ...t, priority } : t,
+        ),
+      };
       schedulePersist(toPersistable(next));
       return next;
     });

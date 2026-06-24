@@ -4,6 +4,9 @@ export type TransactionType = 'task_complete' | 'task_revoke' | 'wish_redeem';
 
 export type TaskSize = 'small' | 'big';
 
+/** Task priority; absent is treated as 'medium'. */
+export type TaskPriority = 'high' | 'medium' | 'low';
+
 /** Derived from balance + redemption; not persisted on Wish */
 export type WishStatus = 'locked' | 'available' | 'redeemed';
 
@@ -22,6 +25,7 @@ export interface Task {
   completedAt: string | null;
   createdAt: string;
   source?: TaskSource;
+  priority?: TaskPriority;
 }
 
 export interface Habit {
@@ -138,4 +142,5 @@ export interface LegacyWish {
 export interface LogTaskOptions {
   rewardAmount?: number;
   taskSize?: TaskSize;
+  priority?: TaskPriority;
 }
