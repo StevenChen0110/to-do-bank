@@ -269,6 +269,21 @@ export function SettingsPage() {
         </Button>
       </section>
 
+      <section className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold">隱私權</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          查看我們如何處理帳號、同步資料與 LINE 連結資料。
+        </p>
+        <a
+          href="/privacy.html"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+        >
+          查看隱私權政策
+        </a>
+      </section>
+
       <p className="text-center text-xs text-muted-foreground">
         釘選願望請至「願望」分頁管理。
       </p>
