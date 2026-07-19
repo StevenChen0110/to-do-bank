@@ -1,21 +1,17 @@
 import {
-  BookOpen,
-  FolderKanban,
   LayoutDashboard,
   ListChecks,
-  Repeat,
   Settings,
   Sparkles,
+  Sprout,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type AppTab =
   | 'dashboard'
   | 'todo'
-  | 'habit'
-  | 'project'
-  | 'journal'
   | 'wishes'
+  | 'growth'
   | 'settings';
 
 export const TABS: {
@@ -25,10 +21,8 @@ export const TABS: {
 }[] = [
   { id: 'dashboard', label: '撲滿', icon: LayoutDashboard },
   { id: 'todo', label: '待辦', icon: ListChecks },
-  { id: 'habit', label: '習慣', icon: Repeat },
-  { id: 'project', label: '專案', icon: FolderKanban },
-  { id: 'journal', label: '日記', icon: BookOpen },
   { id: 'wishes', label: '願望', icon: Sparkles },
+  { id: 'growth', label: '養成', icon: Sprout },
   { id: 'settings', label: '設定', icon: Settings },
 ];
 

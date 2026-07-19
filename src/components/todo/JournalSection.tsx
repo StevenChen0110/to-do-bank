@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { format, parse } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
@@ -26,28 +26,34 @@ export function JournalSection({ dateKey }: JournalSectionProps) {
   const { showToast } = useReward();
 
   const stored = findJournalByDate(journalEntries, dateKey);
-  const [content, setContent] = useState(stored?.content ?? '');
+  const storedContent = stored?.content ?? '';
   const [expanded, setExpanded] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const lastSavedRef = useRef(stored?.content ?? '');
+  // `base` = last content known to be in the store; dirty ⇔ content !== base.
+  const [draft, setDraft] = useState({ dateKey, base: storedContent, content: storedContent });
+  // Adopt external changes during render (date rollover, cloud re-hydrate) —
+  // never clobbering an in-progress draft. Our own save echoes back with
+  // storedContent === draft.content, which only advances `base`.
+  if (draft.dateKey !== dateKey || draft.base !== storedContent) {
+    const dateChanged = draft.dateKey !== dateKey;
+    const dirty = draft.content !== draft.base;
+    setDraft({
+      dateKey,
+      base: storedContent,
+      content: dateChanged || !dirty ? storedContent : draft.content,
+    });
+    if (dateChanged) {
+      setExpanded(false);
+      setSaveState('idle');
+    }
+  }
+  const content = draft.content;
 
   const dateLabel = format(
     parse(dateKey, 'yyyy-MM-dd', new Date()),
     'M月d日',
     { locale: zhTW },
   );
-
-  useEffect(() => {
-    const entry = findJournalByDate(
-      useAppStore.getState().journalEntries,
-      dateKey,
-    );
-    const next = entry?.content ?? '';
-    setContent(next);
-    lastSavedRef.current = next;
-    setSaveState('idle');
-    setExpanded(false);
-  }, [dateKey]);
 
   const showCredited = isJournalCredited(
     findJournalByDate(journalEntries, dateKey),
@@ -57,17 +63,14 @@ export function JournalSection({ dateKey }: JournalSectionProps) {
   const hasContent = content.trim().length > 0;
 
   useEffect(() => {
-    if (!expanded) {
+    if (!expanded || draft.content === draft.base) {
       return;
     }
+    const toSave = draft.content;
     const timer = window.setTimeout(() => {
-      if (content === lastSavedRef.current) {
-        return;
-      }
       unlockAudioFromGesture();
       setSaveState('saving');
-      const { creditedAmount } = saveJournalContent(dateKey, content);
-      lastSavedRef.current = content;
+      const { creditedAmount } = saveJournalContent(dateKey, toSave);
       setSaveState('saved');
 
       if (creditedAmount != null) {
@@ -79,7 +82,7 @@ export function JournalSection({ dateKey }: JournalSectionProps) {
     }, DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [content, dateKey, expanded, saveJournalContent, soundEnabled, showToast]);
+  }, [draft, dateKey, expanded, saveJournalContent, soundEnabled, showToast]);
 
   const toggleLabel = hasContent
     ? `編輯${dateLabel}日記`
@@ -135,7 +138,8 @@ export function JournalSection({ dateKey }: JournalSectionProps) {
             value={content}
             onChange={(e) => {
               setSaveState('idle');
-              setContent(e.target.value);
+              const value = e.target.value;
+              setDraft((d) => ({ ...d, content: value }));
             }}
             placeholder="寫下今天的心情與收穫…"
             rows={3}

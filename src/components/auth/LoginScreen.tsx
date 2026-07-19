@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { PiggyBank } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { isExtension } from '@/lib/runtime';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
@@ -67,21 +68,25 @@ export function LoginScreen() {
         </div>
 
         <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <button
-            type="button"
-            onClick={onGoogle}
-            disabled={busy}
-            className="flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-card text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            <GoogleIcon />
-            使用 Google 登入
-          </button>
+          {!isExtension && (
+            <>
+              <button
+                type="button"
+                onClick={onGoogle}
+                disabled={busy}
+                className="flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-card text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                <GoogleIcon />
+                使用 Google 登入
+              </button>
 
-          <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground">或</span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
+              <div className="flex items-center gap-3">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">或</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            </>
+          )}
 
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold">

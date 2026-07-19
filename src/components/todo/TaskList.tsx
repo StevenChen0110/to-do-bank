@@ -5,6 +5,7 @@ interface TaskListProps {
   tasks: Task[];
   onDelete: (taskId: string) => void;
   onComplete?: (taskId: string) => void;
+  onUncomplete?: (taskId: string) => void;
   emptyMessage?: string;
 }
 
@@ -12,6 +13,7 @@ export function TaskList({
   tasks,
   onDelete,
   onComplete,
+  onUncomplete,
   emptyMessage = '今日尚無記錄。在上方輸入待辦事項開始累積吧。',
 }: TaskListProps) {
   const sorted = [...tasks].sort((a, b) => {
@@ -39,6 +41,7 @@ export function TaskList({
           task={task}
           onDelete={onDelete}
           onComplete={onComplete}
+          onUncomplete={onUncomplete}
         />
       ))}
     </ul>

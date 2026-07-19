@@ -28,6 +28,8 @@ export interface Task {
   priority?: TaskPriority;
   /** Manual sort order within a priority band (lower = higher). */
   order?: number;
+  /** Promoted to the top "任務" panel (Feishu-style). */
+  pinned?: boolean;
 }
 
 export interface Habit {
@@ -91,6 +93,18 @@ export interface AppSettings {
   pinnedWishId: string | null;
   /** User-defined categories appended after built-ins */
   customCategories: CategoryDef[];
+  /** LINE daily-nudge preferences (set via the LINE bot). Preserved as-is. */
+  nudge?: NudgeSettings;
+}
+
+export interface NudgeSettings {
+  morning?: boolean;
+  evening?: boolean;
+  streak?: boolean;
+  wish?: boolean;
+  /** yyyy-MM-dd of last sent — idempotency, written by the cron. */
+  lastMorning?: string;
+  lastEvening?: string;
 }
 
 export type ProjectPhase = 'plan' | 'do' | 'check' | 'act';

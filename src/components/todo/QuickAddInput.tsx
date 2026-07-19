@@ -28,6 +28,9 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('other');
   const [taskSize, setTaskSize] = useState<TaskSize>('small');
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTag, setNewTag] = useState('');
+  const addCategory = useAppStore((s) => s.addCategory);
   const addPendingTask = useAppStore((s) => s.addPendingTask);
   const logCompletedTask = useAppStore((s) => s.logCompletedTask);
   const settings = useAppStore((s) => s.settings);
@@ -37,7 +40,9 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
   const { showToast } = useReward();
 
   const categories = allCategories(customCategories);
-  const isToday = scheduledDate === localDateString();
+  // Past dates = back-filling something already done (log as completed).
+  // Today or future = a plan to do later (add as pending).
+  const isPast = scheduledDate < localDateString();
   const reward = rewardForTaskSize(settings, taskSize);
 
   const selectCategory = (id: string) => {
@@ -50,7 +55,7 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
     const trimmed = stripCategoryPrefix(title.trim());
     if (!trimmed) return;
 
-    if (isToday) {
+    if (!isPast) {
       addPendingTask(trimmed, category, scheduledDate, { taskSize });
       showToast('已新增待辦', 'success', `打勾後 +NT$${reward} 入帳`);
     } else {
@@ -85,6 +90,13 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     submit();
+  };
+
+  const commitNewTag = () => {
+    const def = addCategory(newTag);
+    if (def) selectCategory(def.id);
+    setNewTag('');
+    setAddingTag(false);
   };
 
   return (
@@ -140,6 +152,39 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
             </button>
           );
         })}
+
+        {addingTag ? (
+          <span className="inline-flex items-center gap-1">
+            <Input
+              autoFocus
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  commitNewTag();
+                } else if (e.key === 'Escape') {
+                  setNewTag('');
+                  setAddingTag(false);
+                }
+              }}
+              onBlur={commitNewTag}
+              placeholder="新標籤"
+              maxLength={20}
+              aria-label="新增標籤名稱"
+              className="h-9 w-24 text-xs"
+            />
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingTag(true)}
+            className="min-h-9 rounded-full border border-dashed border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            aria-label="新增標籤"
+          >
+            ＋ 標籤
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2">
@@ -147,7 +192,7 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={isToday ? '輸入待辦事項' : '輸入完成的事'}
+          placeholder={isPast ? '輸入完成的事' : '輸入待辦事項'}
           maxLength={200}
           aria-label="新增事項"
           className="min-h-11 flex-1"
@@ -156,7 +201,7 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
           type="submit"
           size="icon"
           className="h-11 w-11 shrink-0"
-          aria-label={isToday ? '新增待辦' : '完成並入帳'}
+          aria-label={isPast ? '完成並入帳' : '新增待辦'}
         >
           <Plus className="h-4 w-4" />
         </Button>

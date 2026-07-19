@@ -43,6 +43,8 @@ export function normalizeSettings(raw: StoredSettings | undefined): AppSettings 
     diaryCountsAsTask: raw?.diaryCountsAsTask ?? false,
     pinnedWishId: raw?.pinnedWishId ?? null,
     customCategories: raw?.customCategories ?? [],
+    // Preserve LINE nudge prefs untouched so web saves don't wipe them.
+    ...(raw?.nudge ? { nudge: raw.nudge } : {}),
   };
 }
 

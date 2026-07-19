@@ -98,3 +98,20 @@ export async function saveAppData(data: AppData): Promise<void> {
     .from('user_data')
     .upsert({ user_id: _userId, data, updated_at: new Date().toISOString() });
 }
+
+/** Load a specific user_id's blob (used when merging accounts at link time). */
+export async function loadAppDataFor(userId: string): Promise<AppData> {
+  const { data: row } = await supabase
+    .from('user_data')
+    .select('data')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return row?.data ? parseStoredData(row.data) : { ...EMPTY_DATA };
+}
+
+/** Write a blob to a specific user_id (used when merging accounts at link time). */
+export async function saveAppDataFor(userId: string, data: AppData): Promise<void> {
+  await supabase
+    .from('user_data')
+    .upsert({ user_id: userId, data, updated_at: new Date().toISOString() });
+}

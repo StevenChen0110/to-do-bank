@@ -8,7 +8,8 @@ import {
 } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { setCurrentUser } from '@/lib/storage';
+import { loadAppDataFor, saveAppDataFor, setCurrentUser } from '@/lib/storage';
+import { mergeAppData } from '@/lib/merge';
 
 interface AuthState {
   user: User | null;
@@ -49,6 +50,27 @@ async function resolveStorageKey(uid: string): Promise<{ key: string; lineId: st
   return { key: `auth:${uid}`, lineId: null };
 }
 
+/**
+ * When an account is linked, the web's original `auth:<uid>` row is left behind
+ * (unread). Fold it into the canonical LINE row once so nothing is lost — then
+ * delete it so this runs only once. Fixes accounts linked before merge existed.
+ */
+async function healOrphan(webKey: string, lineKey: string): Promise<void> {
+  if (webKey === lineKey) return;
+  const webData = await loadAppDataFor(webKey);
+  const hasData =
+    webData.tasks.length > 0 ||
+    webData.transactions.length > 0 ||
+    webData.wishes.length > 0 ||
+    webData.habits.length > 0 ||
+    webData.projects.length > 0 ||
+    webData.journalEntries.length > 0;
+  if (!hasData) return;
+  const lineData = await loadAppDataFor(lineKey);
+  await saveAppDataFor(lineKey, mergeAppData(webData, lineData)); // web = primary
+  await supabase.from('user_data').delete().eq('user_id', webKey);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -64,6 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const { key, lineId } = await resolveStorageKey(user.id);
+    // Linked account: recover/merge any leftover web-only data into the LINE row.
+    if (lineId) {
+      try {
+        await healOrphan(`auth:${user.id}`, lineId);
+      } catch (e) {
+        console.error('account heal failed', e);
+      }
+    }
     setCurrentUser(key);
     setState({ user, storageKey: key, linkedLineId: lineId, ready: true });
   }, []);
@@ -126,7 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       await supabase.from('pairing_codes').delete().eq('code', norm);
-      await applyUser(state.user); // re-point storage to the LINE row
+      // applyUser folds the web account's data into the LINE row (see healOrphan).
+      await applyUser(state.user);
       return { error: null };
     },
     [state.user, applyUser],

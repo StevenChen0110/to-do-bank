@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type {
   AppData,
   AppSettings,
+  CategoryDef,
   Habit,
   JournalEntry,
   LogTaskOptions,
@@ -16,6 +17,7 @@ import type {
   Transaction,
   Wish,
 } from '../types';
+import { allCategories } from '../lib/categories';
 import { localDateString } from '../lib/dates';
 import { dueToday } from '../lib/habits';
 import {
@@ -58,12 +60,27 @@ interface AppStore extends PersistableState {
     options?: LogTaskOptions,
   ) => Task | null;
   completeTask: (taskId: string) => void;
+  /** Revert a completed task to pending and refund its credit. */
+  uncompleteTask: (taskId: string) => void;
   deleteTask: (taskId: string) => void;
+  /** Edit an existing task's editable fields. */
+  updateTask: (
+    taskId: string,
+    patch: Partial<Pick<Task, 'title' | 'category' | 'reward'>>,
+  ) => void;
+  /** Move a task to another day; orderedIds = new order of that day's ids. */
+  moveTaskToDay: (taskId: string, date: string, orderedIds: string[]) => void;
   setTaskPriority: (taskId: string, priority: TaskPriority) => void;
+  /** Toggle a task's urgent (high-priority) flag on/off. */
+  toggleTaskUrgent: (taskId: string) => void;
+  /** Toggle whether a task is promoted to the top "任務" panel. */
+  toggleTaskPin: (taskId: string) => void;
   /** Apply drag-reorder results: new priority + order for each task. */
   reorderTasks: (
     updates: { id: string; priority: TaskPriority; order: number }[],
   ) => void;
+  /** Persist a new manual order for the given task ids (order = position). */
+  setTaskOrder: (orderedIds: string[]) => void;
   saveJournalContent: (
     dateKey: string,
     content: string,
@@ -76,7 +93,7 @@ interface AppStore extends PersistableState {
   deleteWish: (wishId: string) => void;
   redeemWish: (wishId: string) => void;
   setPinnedWishId: (wishId: string | null) => void;
-  addCategory: (label: string) => void;
+  addCategory: (label: string) => CategoryDef | null;
   deleteCategory: (id: string) => void;
   addHabit: (input: AddHabitInput) => void;
   updateHabit: (
@@ -358,12 +375,70 @@ export const useAppStore = create<AppStore>((set) => ({
     });
   },
 
+  uncompleteTask: (taskId) => {
+    const now = new Date().toISOString();
+    set((state) => {
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (!task || task.completedAt === null) {
+        return state;
+      }
+      const transaction: Transaction = {
+        id: uuidv4(),
+        type: 'task_revoke',
+        amount: -task.reward,
+        taskId: task.id,
+        createdAt: now,
+        note: task.title,
+      };
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === taskId ? { ...t, completedAt: null } : t,
+        ),
+        transactions: [...state.transactions, transaction],
+        journalEntries: state.journalEntries.map((j) =>
+          j.creditedTaskId === taskId ? clearJournalCredit(j) : j,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
   setTaskPriority: (taskId, priority) => {
     set((state) => {
       const next: AppStore = {
         ...state,
         tasks: state.tasks.map((t) =>
           t.id === taskId ? { ...t, priority } : t,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  toggleTaskUrgent: (taskId) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === taskId
+            ? { ...t, priority: t.priority === 'high' ? undefined : 'high' }
+            : t,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  toggleTaskPin: (taskId) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === taskId ? { ...t, pinned: !t.pinned } : t,
         ),
       };
       schedulePersist(toPersistable(next));
@@ -381,6 +456,21 @@ export const useAppStore = create<AppStore>((set) => ({
           const u = byId.get(t.id);
           return u ? { ...t, priority: u.priority, order: u.order } : t;
         }),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  setTaskOrder: (orderedIds) => {
+    if (orderedIds.length === 0) return;
+    const pos = new Map(orderedIds.map((id, i) => [id, i]));
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          pos.has(t.id) ? { ...t, order: pos.get(t.id) } : t,
+        ),
       };
       schedulePersist(toPersistable(next));
       return next;
@@ -423,6 +513,49 @@ export const useAppStore = create<AppStore>((set) => ({
     });
   },
 
+  updateTask: (taskId, patch) => {
+    set((state) => {
+      const clean: Partial<Pick<Task, 'title' | 'category' | 'reward'>> = {};
+      if (patch.title !== undefined) {
+        const t = patch.title.trim().slice(0, 200);
+        if (!t) return state;
+        clean.title = t;
+      }
+      if (patch.category !== undefined) clean.category = patch.category;
+      if (patch.reward !== undefined) clean.reward = patch.reward;
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === taskId ? { ...t, ...clean } : t,
+        ),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  moveTaskToDay: (taskId, date, orderedIds) => {
+    const pos = new Map(orderedIds.map((id, i) => [id, i]));
+    set((state) => {
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (!task || task.scheduledDate === date) {
+        // Same day: still allow reordering via orderedIds.
+        if (orderedIds.length === 0) return state;
+      }
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) => {
+          if (t.id === taskId) {
+            return { ...t, scheduledDate: date, order: pos.get(t.id) ?? t.order };
+          }
+          return pos.has(t.id) ? { ...t, order: pos.get(t.id) } : t;
+        }),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
   saveJournalContent: (dateKey, content) => {
     const now = new Date().toISOString();
     let result: { entry: JournalEntry; creditedAmount: number | null } = {
@@ -461,8 +594,6 @@ export const useAppStore = create<AppStore>((set) => ({
           : [...state.journalEntries, entry],
       };
 
-      let creditedAmount: number | null = null;
-
       if (
         shouldCreditDiaryOnSave(
           content,
@@ -492,8 +623,7 @@ export const useAppStore = create<AppStore>((set) => ({
               e.date === dateKey ? entryWithCredit : e,
             ),
           };
-          creditedAmount = reward;
-          result = { entry: entryWithCredit, creditedAmount };
+          result = { entry: entryWithCredit, creditedAmount: reward };
         } else {
           result = { entry, creditedAmount: null };
         }
@@ -604,28 +734,29 @@ export const useAppStore = create<AppStore>((set) => ({
 
   addCategory: (label) => {
     const trimmed = label.trim().slice(0, 20);
-    if (!trimmed) return;
+    if (!trimmed) return null;
+    let created: CategoryDef | null = null;
     set((state) => {
-      if (
-        state.settings.customCategories.some(
-          (c) => c.label === trimmed,
-        )
-      ) {
+      const existing = allCategories(state.settings.customCategories).find(
+        (c) => c.label === trimmed,
+      );
+      if (existing) {
+        created = existing;
         return state;
       }
+      const def: CategoryDef = { id: uuidv4(), label: trimmed };
+      created = def;
       const next: AppStore = {
         ...state,
         settings: {
           ...state.settings,
-          customCategories: [
-            ...state.settings.customCategories,
-            { id: uuidv4(), label: trimmed },
-          ],
+          customCategories: [...state.settings.customCategories, def],
         },
       };
       schedulePersist(toPersistable(next));
       return next;
     });
+    return created;
   },
 
   deleteCategory: (id) => {

@@ -39,6 +39,9 @@ export function WishlistPage() {
   const sorted = useMemo(
     () =>
       [...filtered].sort((a, b) => {
+        // 主目標（釘選）永遠置頂
+        if (a.id === pinnedWishId && b.id !== pinnedWishId) return -1;
+        if (b.id === pinnedWishId && a.id !== pinnedWishId) return 1;
         const sa = getWishStatus(a, balance);
         const sb = getWishStatus(b, balance);
         if (sa === 'available' && sb !== 'available') {
@@ -49,7 +52,7 @@ export function WishlistPage() {
         }
         return a.cost - b.cost;
       }),
-    [filtered, balance],
+    [filtered, balance, pinnedWishId],
   );
 
   const handleRedeemClick = (wish: Wish) => {

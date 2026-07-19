@@ -1,16 +1,34 @@
-import { CheckCircle2, Circle, ClipboardList, ListTodo } from 'lucide-react';
+import { addDays, format, parse } from 'date-fns';
+import { zhTW } from 'date-fns/locale';
+import { CalendarClock, CheckCircle2, Circle, ClipboardList, ListTodo } from 'lucide-react';
 import type { Task } from '@/types';
+import { localDateString } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 interface TodaySnapshotProps {
   tasks: Task[];
+  /** Future-dated pending tasks, shown as a peek so upcoming plans aren't missed. */
+  upcomingTasks?: Task[];
   dailyEarned: number;
   onComplete: (taskId: string) => void;
   onNavigate: () => void;
 }
 
-export function TodaySnapshot({ tasks, dailyEarned, onComplete, onNavigate }: TodaySnapshotProps) {
+function upcomingLabel(dk: string, todayKey: string): string {
+  const tomorrow = localDateString(addDays(parse(todayKey, 'yyyy-MM-dd', new Date()), 1));
+  if (dk === tomorrow) return '明天';
+  return format(parse(dk, 'yyyy-MM-dd', new Date()), 'M/d EEE', { locale: zhTW });
+}
+
+export function TodaySnapshot({
+  tasks,
+  upcomingTasks = [],
+  dailyEarned,
+  onComplete,
+  onNavigate,
+}: TodaySnapshotProps) {
+  const todayKey = localDateString();
   const pending = tasks.filter((t) => t.completedAt === null);
   const completed = tasks.filter((t) => t.completedAt !== null);
   const total = tasks.length;
@@ -108,6 +126,37 @@ export function TodaySnapshot({ tasks, dailyEarned, onComplete, onNavigate }: To
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Upcoming — future-dated pending tasks */}
+        {upcomingTasks.length > 0 && (
+          <div className={cn('pb-1', total > 0 && 'mt-3 border-t border-border pt-3')}>
+            <p className="mb-1.5 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <CalendarClock className="h-3.5 w-3.5" />
+              未來待辦
+            </p>
+            <ul className="space-y-1.5">
+              {upcomingTasks.map((task) => (
+                <li key={task.id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onComplete(task.id)}
+                    aria-label={`提前完成 ${task.title}`}
+                    className="shrink-0 text-muted-foreground transition-colors hover:text-primary active:scale-90"
+                  >
+                    <Circle className="h-4 w-4" />
+                  </button>
+                  <span className="flex-1 truncate text-sm">{task.title}</span>
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {upcomingLabel(task.scheduledDate, todayKey)}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    +{formatCurrency(task.reward)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 

@@ -18,5 +18,14 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // zh-TW copy uses full-width spaces inside string/template literals.
+      'no-irregular-whitespace': ['error', { skipStrings: true, skipTemplates: true }],
+      // `const { removed: _x, ...rest } = obj` is the idiomatic omit pattern.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+      // shadcn-style files co-export cva variants / context hooks with their
+      // component; splitting them adds churn for an HMR-only nicety.
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ])

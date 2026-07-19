@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "To Do Bank",
+  "version": "1.7.0",
+  "description": "完成待辦，存進撲滿——自我獎勵待辦系統",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "To Do Bank"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.html", "assets/*", "icon-*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "permissions": ["sidePanel", "storage"],
+  "host_permissions": ["https://loxurrftzcmylcyqmdwl.supabase.co/*"],
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  }
+}

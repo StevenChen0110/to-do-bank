@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { PiggyBank, Settings } from 'lucide-react';
+import { PanelRight, PiggyBank, Settings } from 'lucide-react';
+import { isExtPopup, openSidePanel } from '@/lib/runtime';
 import { useAppStore } from '@/store/useAppStore';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { RewardProvider } from '@/context/RewardContext';
@@ -9,9 +10,7 @@ import { GoalChip } from '@/components/layout/GoalChip';
 import { TabNav, TABS, type AppTab } from './TabNav';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TodoLogPage } from '@/pages/TodoLogPage';
-import { HabitsPage } from '@/pages/HabitsPage';
-import { ProjectsPage } from '@/pages/ProjectsPage';
-import { JournalPage } from '@/pages/JournalPage';
+import { GrowthPage } from '@/pages/GrowthPage';
 import { WishlistPage } from '@/pages/WishlistPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { localDateString } from '@/lib/dates';
@@ -33,6 +32,25 @@ function AppShellInner() {
   useEffect(() => {
     if (hydrated) materializeHabitTasks(localDateString());
   }, [hydrated, materializeHabitTasks]);
+
+  // Re-pull from the cloud when the tab regains focus, so edits made on LINE
+  // (or another device) show up without a manual reload. Throttled.
+  useEffect(() => {
+    if (!ready || !user || !storageKey) return;
+    let last = Date.now();
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - last < 1500) return;
+      last = Date.now();
+      void hydrate().then(() => materializeHabitTasks(localDateString()));
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [ready, user, storageKey, hydrate, materializeHabitTasks]);
 
   if (!ready) {
     return (
@@ -69,6 +87,16 @@ function AppShellInner() {
           </div>
           <div className="flex shrink-0 items-center gap-2 pt-px">
             {showGoalChip && <GoalChip />}
+            {isExtPopup && (
+              <button
+                type="button"
+                onClick={() => void openSidePanel()}
+                aria-label="在側邊欄開啟"
+                className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <PanelRight className="h-5 w-5" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setTab('settings')}
@@ -117,10 +145,8 @@ function AppShellInner() {
           <div className="mx-auto max-w-2xl">
             {tab === 'dashboard' && <DashboardPage onNavigate={setTab} />}
             {tab === 'todo' && <TodoLogPage />}
-            {tab === 'habit' && <HabitsPage />}
-            {tab === 'project' && <ProjectsPage />}
-            {tab === 'journal' && <JournalPage />}
             {tab === 'wishes' && <WishlistPage />}
+            {tab === 'growth' && <GrowthPage />}
             {tab === 'settings' && <SettingsPage />}
           </div>
         </main>
