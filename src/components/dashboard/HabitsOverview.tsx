@@ -1,12 +1,12 @@
 import { CheckCircle2, Circle, Flame, Repeat } from 'lucide-react';
 import type { Habit } from '@/types';
 import { localDateString } from '@/lib/dates';
-import { dueToday, habitTaskFor, streakForHabit } from '@/lib/habits';
+import { completedCount, dueToday, habitTaskFor, streakForHabit } from '@/lib/habits';
 import { formatPinnedGoalNarrative, isPinnedWishActive } from '@/lib/pinnedWish';
 import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
-import { formatCurrency } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 interface HabitsOverviewProps {
   onNavigate: () => void;
@@ -33,7 +33,6 @@ export function HabitsOverview({ onNavigate }: HabitsOverviewProps) {
   const doneHabits = due.filter((h) => isDone(h));
   const total = due.length;
   const doneCount = doneHabits.length;
-  const restCount = active.length - total;
   const progressPct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
 
   const completeHabit = (habit: Habit) => {
@@ -57,6 +56,17 @@ export function HabitsOverview({ onNavigate }: HabitsOverviewProps) {
     }
     showToast(`+NT$${task.reward} 已入帳`, 'success', detail);
   };
+
+  /** Past (before today) habit instances that were never completed. */
+  const missedFor = (habitId: string) =>
+    tasks.filter(
+      (t) =>
+        t.source?.type === 'habit' &&
+        t.source.refId === habitId &&
+        t.completedAt === null &&
+        t.scheduledDate < todayKey,
+    ).length;
+  const totalMissed = active.reduce((sum, h) => sum + missedFor(h.id), 0);
 
   return (
     <section className="rounded-xl border border-border bg-card shadow-sm">
@@ -96,53 +106,42 @@ export function HabitsOverview({ onNavigate }: HabitsOverviewProps) {
         </div>
       )}
 
-      {/* Body */}
+      {/* Body — every active habit: today status, goal shortfall, past misses */}
       <div className="px-4 pb-1">
-        {total === 0 ? (
-          <p className="pb-3 text-sm text-muted-foreground">
-            今天沒有排定的習慣{restCount > 0 ? '（都是休息日）' : ''}。
-          </p>
-        ) : (
-          <ul className="space-y-1.5">
-            {/* Pending — tappable */}
-            {pendingHabits.map((habit) => {
-              const streak = streakForHabit(tasks, habit.id, todayKey);
-              return (
-                <li key={habit.id} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => completeHabit(habit)}
-                    aria-label={`完成 ${habit.title}`}
-                    className="shrink-0 text-muted-foreground transition-colors hover:text-primary active:scale-90"
-                  >
-                    <Circle className="h-4 w-4" />
-                  </button>
-                  <span className="flex-1 truncate text-sm">{habit.title}</span>
-                  {streak > 0 && (
-                    <span className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-orange-500">
-                      <Flame className="h-3.5 w-3.5" />
-                      {streak}
-                    </span>
+        <ul className="space-y-2">
+          {active.map((habit) => {
+            const streak = streakForHabit(tasks, habit.id, todayKey);
+            const done = completedCount(tasks, habit.id);
+            const goalShort = Math.max(0, habit.targetDays - done);
+            const missed = missedFor(habit.id);
+            const due = dueToday(habit, todayKey);
+            const doneToday = isDone(habit);
+            return (
+              <li
+                key={habit.id}
+                className="rounded-lg border border-border/60 bg-background/40 px-3 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  {due && !doneToday ? (
+                    <button
+                      type="button"
+                      onClick={() => completeHabit(habit)}
+                      aria-label={`完成 ${habit.title}`}
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-primary active:scale-90"
+                    >
+                      <Circle className="h-4 w-4" />
+                    </button>
+                  ) : doneToday ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                  ) : (
+                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground/30" />
                   )}
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    +{formatCurrency(habit.reward)}
-                  </span>
-                </li>
-              );
-            })}
-
-            {/* Divider */}
-            {pendingHabits.length > 0 && doneHabits.length > 0 && (
-              <li aria-hidden className="border-t border-border pt-0.5" />
-            )}
-
-            {/* Done */}
-            {doneHabits.map((habit) => {
-              const streak = streakForHabit(tasks, habit.id, todayKey);
-              return (
-                <li key={habit.id} className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                  <span className="flex-1 truncate text-sm text-muted-foreground line-through">
+                  <span
+                    className={cn(
+                      'flex-1 truncate text-sm font-medium',
+                      doneToday && 'text-muted-foreground line-through',
+                    )}
+                  >
                     {habit.title}
                   </span>
                   {streak > 0 && (
@@ -151,17 +150,33 @@ export function HabitsOverview({ onNavigate }: HabitsOverviewProps) {
                       {streak}
                     </span>
                   )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-6 text-xs text-muted-foreground">
+                  <span>
+                    目標 {Math.min(done, habit.targetDays)}/{habit.targetDays} 天
+                  </span>
+                  {goalShort > 0 ? (
+                    <span className="font-medium text-primary">還差 {goalShort} 天</span>
+                  ) : (
+                    <span className="font-medium text-primary">已達標 🎉</span>
+                  )}
+                  {missed > 0 && (
+                    <span className="font-medium text-amber-600">· 過去漏 {missed} 次</span>
+                  )}
+                  {!due && !doneToday && <span>· 今天休息</span>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
       {/* Footer */}
       <div className="mt-2 flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
         <span>共 {active.length} 個習慣</span>
-        {restCount > 0 && total > 0 && <span>{restCount} 個今天休息</span>}
+        {totalMissed > 0 && (
+          <span className="text-amber-600">過去共漏 {totalMissed} 次</span>
+        )}
       </div>
     </section>
   );
