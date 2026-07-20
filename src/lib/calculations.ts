@@ -5,9 +5,14 @@ export function getCurrentBalance(transactions: Transaction[]): number {
   return transactions.reduce((sum, tx) => sum + tx.amount, 0);
 }
 
+/**
+ * Cumulative earned = completions net of revokes (uncomplete/delete refunds),
+ * excluding wish redemptions (spending your savings isn't "un-earning" it).
+ * Netting revokes keeps this stable when a completion is toggled off.
+ */
 export function getTotalEarned(transactions: Transaction[]): number {
   return transactions
-    .filter((tx) => tx.amount > 0)
+    .filter((tx) => tx.type === 'task_complete' || tx.type === 'task_revoke')
     .reduce((sum, tx) => sum + tx.amount, 0);
 }
 
