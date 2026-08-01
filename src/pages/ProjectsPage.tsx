@@ -1,16 +1,17 @@
 import { useState, type KeyboardEvent } from 'react';
 import {
   Archive,
+  CalendarPlus,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Circle,
   Flag,
   Plus,
-  Send,
   Trash2,
 } from 'lucide-react';
 import type { Project, ProjectPhase, ProjectStep, ProjectTemplate } from '@/types';
+import { localDateString } from '@/lib/dates';
 import {
   PHASES,
   projectProgress,
@@ -23,7 +24,6 @@ import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export function ProjectsPage() {
@@ -39,8 +39,11 @@ export function ProjectsPage() {
   const updateStep = useAppStore((s) => s.updateStep);
   const deleteStep = useAppStore((s) => s.deleteStep);
   const pushStepToTodo = useAppStore((s) => s.pushStepToTodo);
+  const moveTaskToDay = useAppStore((s) => s.moveTaskToDay);
   const completeTask = useAppStore((s) => s.completeTask);
   const { showToast } = useReward();
+
+  const todayKey = localDateString();
 
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -99,6 +102,18 @@ export function ProjectsPage() {
   const renderStep = (project: Project, step: ProjectStep) => {
     const status = stepStatus(step, tasks);
     const done = status === 'done';
+    const linkedTask = step.taskId ? tasks.find((t) => t.id === step.taskId) : undefined;
+    const scheduledDate = linkedTask?.scheduledDate ?? '';
+
+    const onPickDate = (value: string) => {
+      if (!value) return;
+      if (status === 'planning') {
+        pushStepToTodo(project.id, step.id, value);
+      } else if (linkedTask) {
+        moveTaskToDay(linkedTask.id, value, []);
+      }
+    };
+
     return (
       <li key={step.id} className="flex items-center gap-2">
         <button
@@ -122,22 +137,31 @@ export function ProjectsPage() {
         >
           {step.title}
         </span>
-        {status === 'pending' && (
-          <Badge variant="muted" className="shrink-0 text-[10px]">
-            待辦中
-          </Badge>
-        )}
-        {status === 'planning' && (
-          <button
-            type="button"
-            onClick={() => pushStepToTodo(project.id, step.id)}
-            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] text-primary transition-colors hover:bg-primary/10"
-            aria-label="送進待辦"
+
+        {/* 就地排程：一排就自動進週計畫 */}
+        {!done && (
+          <label
+            className={cn(
+              'relative flex shrink-0 cursor-pointer items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] transition-colors',
+              scheduledDate
+                ? 'border-primary/40 bg-primary/5 text-primary'
+                : 'border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-primary',
+            )}
+            title={scheduledDate ? '改排程' : '排到某天（自動進週計畫）'}
           >
-            <Send className="h-3 w-3" />
-            送進待辦
-          </button>
+            <CalendarPlus className="h-3.5 w-3.5" />
+            {scheduledDate ? scheduledDate.slice(5).replace('-', '/') : '排程'}
+            <input
+              type="date"
+              value={scheduledDate}
+              min={todayKey}
+              onChange={(e) => onPickDate(e.target.value)}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              aria-label={scheduledDate ? `改排程 ${step.title}` : `排程 ${step.title}`}
+            />
+          </label>
         )}
+
         <button
           type="button"
           onClick={() => deleteStep(project.id, step.id)}
