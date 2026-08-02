@@ -87,7 +87,6 @@ export function TodoLogPage() {
 
   const tasks = useAppStore((s) => s.tasks);
   const deleteTask = useAppStore((s) => s.deleteTask);
-  const addPendingTask = useAppStore((s) => s.addPendingTask);
   const completeTask = useAppStore((s) => s.completeTask);
   const uncompleteTask = useAppStore((s) => s.uncompleteTask);
   const logCompletedTask = useAppStore((s) => s.logCompletedTask);
@@ -287,11 +286,6 @@ export function TodoLogPage() {
     setWeekAnchor((cur) =>
       localDateString(addDays(parse(cur, 'yyyy-MM-dd', new Date()), delta * 7)),
     );
-
-  const handleWeekAdd = (date: string, title: string) => {
-    const created = addPendingTask(title, filterCat !== 'all' ? filterCat : 'other', date);
-    if (created) showToast('已加入', 'success', `${format(parse(date, 'yyyy-MM-dd', new Date()), 'M/d')} 待辦`);
-  };
 
   // 拖曳環境：週看板日欄 + 逾期積木共用（逾期可從整理區拖進某天）
   const dndSensors = useSensors(
@@ -564,7 +558,6 @@ export function TodoLogPage() {
             tasksByDay={weekTasksByDay}
             onDelete={handleDelete}
             onComplete={handleComplete}
-            onQuickAdd={handleWeekAdd}
           />
             </>
           ) : (
