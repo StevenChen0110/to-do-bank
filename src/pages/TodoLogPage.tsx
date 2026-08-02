@@ -10,6 +10,19 @@ import {
   ClipboardList,
   Plus,
 } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCorners,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { localDateString } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { formatPinnedGoalNarrative, isPinnedWishActive } from '@/lib/pinnedWish';
@@ -18,11 +31,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
 import { allCategories } from '@/lib/categories';
 import { TaskList } from '@/components/todo/TaskList';
+import { TaskItem } from '@/components/todo/TaskItem';
 import { PlanBoard } from '@/components/todo/PlanBoard';
-import { WeekBoard } from '@/components/todo/WeekBoard';
-import { OverdueRail } from '@/components/todo/OverdueRail';
-import { TodayHabitsRail } from '@/components/todo/TodayHabitsRail';
-import { HabitBacklogRail } from '@/components/todo/HabitBacklogRail';
+import { WeekGrid, DAY_PREFIX } from '@/components/todo/WeekBoard';
 import { AddTaskBar } from '@/components/todo/AddTaskBar';
 import { TaskPanel } from '@/components/todo/TaskPanel';
 import { JournalSection } from '@/components/todo/JournalSection';
@@ -282,6 +293,68 @@ export function TodoLogPage() {
     if (created) showToast('已加入', 'success', `${format(parse(date, 'yyyy-MM-dd', new Date()), 'M/d')} 待辦`);
   };
 
+  // 拖曳環境：週看板日欄 + 逾期積木共用（逾期可從整理區拖進某天）
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const weekDnd = useMemo(() => {
+    const dayOfTask = new Map<string, string>();
+    const idsByDay = new Map<string, string[]>();
+    for (const dk of visibleWeekDates) {
+      const list = weekTasksByDay.get(dk) ?? [];
+      idsByDay.set(dk, list.map((t) => t.id));
+      for (const t of list) dayOfTask.set(t.id, dk);
+    }
+    return { dayOfTask, idsByDay, overdueIds: new Set(overdueTasks.map((t) => t.id)) };
+  }, [visibleWeekDates, weekTasksByDay, overdueTasks]);
+
+  const activeDragTask =
+    (activeDragId &&
+      [...visibleWeekDates.flatMap((dk) => weekTasksByDay.get(dk) ?? []), ...overdueTasks].find(
+        (t) => t.id === activeDragId,
+      )) ||
+    null;
+
+  const handlePlanDragEnd = (e: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = e;
+    if (!over) return;
+    const activeId = active.id as string;
+    const overId = over.id as string;
+    const targetDay = overId.startsWith(DAY_PREFIX)
+      ? overId.slice(DAY_PREFIX.length)
+      : weekDnd.dayOfTask.get(overId);
+    if (!targetDay) return;
+
+    const insertIndex = (dayIds: string[]) =>
+      overId.startsWith(DAY_PREFIX) ? dayIds.length : Math.max(0, dayIds.indexOf(overId));
+
+    // 逾期積木 → 排進某天
+    if (weekDnd.overdueIds.has(activeId)) {
+      const targetIds = [...(weekDnd.idsByDay.get(targetDay) ?? [])];
+      targetIds.splice(insertIndex(targetIds), 0, activeId);
+      moveTaskToDay(activeId, targetDay, targetIds);
+      return;
+    }
+    const sourceDay = weekDnd.dayOfTask.get(activeId);
+    if (!sourceDay) return;
+    if (sourceDay === targetDay) {
+      const ids = weekDnd.idsByDay.get(targetDay) ?? [];
+      const oldIndex = ids.indexOf(activeId);
+      const newIndex = overId.startsWith(DAY_PREFIX) ? ids.length - 1 : ids.indexOf(overId);
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+      setTaskOrder(arrayMove(ids, oldIndex, newIndex));
+      return;
+    }
+    const targetIds = [...(weekDnd.idsByDay.get(targetDay) ?? [])];
+    targetIds.splice(insertIndex(targetIds), 0, activeId);
+    moveTaskToDay(activeId, targetDay, targetIds);
+  };
+
 
   // 紀錄：已完成，套時間範圍，依日期新到舊
   const logGroups = useMemo(() => {
@@ -324,9 +397,16 @@ export function TodoLogPage() {
     group.filter((t) => t.completedAt !== null).reduce((s, t) => s + t.reward, 0);
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* 任務面板（置頂） */}
-      <TaskPanel
+    <DndContext
+      sensors={dndSensors}
+      collisionDetection={closestCorners}
+      onDragStart={(e: DragStartEvent) => setActiveDragId(e.active.id as string)}
+      onDragEnd={handlePlanDragEnd}
+      onDragCancel={() => setActiveDragId(null)}
+    >
+      <div className="flex flex-col gap-4">
+        {/* 任務面板（置頂） */}
+        <TaskPanel
         tasks={pinnedTasks}
         onComplete={handleComplete}
         onDelete={handleDelete}
@@ -362,6 +442,19 @@ export function TodoLogPage() {
         ))}
       </div>
 
+      {/* 安排（逾期收於其下）：置於標籤上方 */}
+      {mode === 'plan' && (
+        <AddTaskBar
+          overdueTasks={overdueTasks}
+          todayKey={todayKey}
+          overdueDraggable={lens === 'week'}
+          onComplete={handleComplete}
+          onDelete={handleDelete}
+          onMoveToToday={(id) => moveTaskToDay(id, todayKey, [])}
+          onReschedule={(id, d) => moveTaskToDay(id, d, [])}
+        />
+      )}
+
       {/* 分類篩選（兩模式共用）＋日期排序方向 */}
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="分類篩選">
         <button
@@ -393,28 +486,7 @@ export function TodoLogPage() {
 
       {mode === 'plan' ? (
         <>
-          {/* 逾期常駐軌 */}
-          {overdueTasks.length > 0 && (
-            <OverdueRail
-              tasks={overdueTasks}
-              todayKey={todayKey}
-              onComplete={handleComplete}
-              onDelete={handleDelete}
-              onMoveToToday={(id) => moveTaskToDay(id, todayKey, [])}
-              onReschedule={(id, d) => moveTaskToDay(id, d, [])}
-            />
-          )}
-
-          {/* 今日習慣（獨立軌，不混進日欄） */}
-          <TodayHabitsRail />
-
-          {/* 習慣待辦（漏做，可批次補做） */}
-          <HabitBacklogRail />
-
-          {/* 安排待辦（緊湊、預設收合） */}
-          <AddTaskBar />
-
-          {/* 鏡頭切換 */}
+          {/* 鏡頭切換（規劃為主） */}
           <div
             className="flex gap-2 rounded-xl border border-border bg-card p-1"
             role="group"
@@ -486,14 +558,12 @@ export function TodoLogPage() {
             直接拖曳任務在各天之間移動來安排這週；每天底下可快速加事情，往「下週」翻就能規劃未來，全程不用選日期。
           </p>
 
-          <WeekBoard
+          <WeekGrid
             weekDates={visibleWeekDates}
             todayKey={todayKey}
             tasksByDay={weekTasksByDay}
             onDelete={handleDelete}
             onComplete={handleComplete}
-            onReorder={setTaskOrder}
-            onMoveToDay={moveTaskToDay}
             onQuickAdd={handleWeekAdd}
           />
             </>
@@ -670,6 +740,12 @@ export function TodoLogPage() {
           <JournalSection dateKey={todayKey} />
         </>
       )}
-    </div>
+      </div>
+      <DragOverlay>
+        {activeDragTask ? (
+          <TaskItem task={activeDragTask} onDelete={handleDelete} onComplete={handleComplete} />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
