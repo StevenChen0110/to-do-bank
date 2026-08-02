@@ -39,6 +39,8 @@ interface TaskItemProps {
   onTogglePin?: (taskId: string) => void;
   /** Small date chip (used by the 任務 panel to show the scheduled day). */
   dateBadge?: string;
+  /** Tighter layout for narrow columns (week board): icon-only actions. */
+  compact?: boolean;
   /** When provided, renders a drag handle and makes the row sortable. */
   drag?: DragProps;
 }
@@ -51,6 +53,7 @@ export function TaskItem({
   onToggleUrgent,
   onTogglePin,
   dateBadge,
+  compact = false,
   drag,
 }: TaskItemProps) {
   const completed = task.completedAt !== null;
@@ -158,7 +161,8 @@ export function TaskItem({
       {...(drag?.attributes ?? {})}
       {...(drag?.listeners ?? {})}
       className={cn(
-        'flex items-center gap-2 rounded-lg border bg-card px-3 py-3',
+        'flex items-center rounded-lg border bg-card px-3',
+        compact ? 'gap-1.5 py-2' : 'gap-2 py-3',
         urgent && !completed
           ? 'border-red-400/60 border-l-4 border-l-red-500'
           : 'border-border',
@@ -219,7 +223,8 @@ export function TaskItem({
             </span>
           ) : (
             <span className="text-xs text-muted-foreground">
-              +{formatCurrency(task.reward)} 待入帳
+              +{formatCurrency(task.reward)}
+              {!compact && ' 待入帳'}
             </span>
           )}
         </div>
@@ -240,7 +245,7 @@ export function TaskItem({
           aria-pressed={urgent}
         >
           <Flag className={cn('h-4 w-4', urgent && 'fill-current')} />
-          <span className="hidden sm:inline">緊急</span>
+          {!compact && <span className="hidden sm:inline">緊急</span>}
         </Button>
       )}
 
@@ -259,7 +264,7 @@ export function TaskItem({
           aria-pressed={!!task.pinned}
         >
           <Pin className={cn('h-4 w-4', task.pinned && 'fill-current')} />
-          <span className="hidden sm:inline">任務</span>
+          {!compact && <span className="hidden sm:inline">任務</span>}
         </Button>
       )}
 
@@ -274,7 +279,7 @@ export function TaskItem({
           aria-label={`編輯 ${task.title}`}
         >
           <Pencil className="h-4 w-4" />
-          <span className="hidden sm:inline">編輯</span>
+          {!compact && <span className="hidden sm:inline">編輯</span>}
         </Button>
       )}
 
@@ -288,7 +293,7 @@ export function TaskItem({
         aria-label={`刪除 ${task.title}`}
       >
         <Trash2 className="h-4 w-4" />
-        <span className="hidden sm:inline">刪除</span>
+        {!compact && <span className="hidden sm:inline">刪除</span>}
       </Button>
     </li>
   );
