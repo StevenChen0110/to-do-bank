@@ -736,7 +736,14 @@ export function TodoLogPage() {
       </div>
       <DragOverlay>
         {activeDragTask ? (
-          <TaskItem task={activeDragTask} onDelete={handleDelete} onComplete={handleComplete} />
+          <div className="w-[300px] max-w-[85vw]">
+            <TaskItem
+              task={activeDragTask}
+              onDelete={handleDelete}
+              onComplete={handleComplete}
+              compact
+            />
+          </div>
         ) : null}
       </DragOverlay>
     </DndContext>
