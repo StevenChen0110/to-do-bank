@@ -30,6 +30,8 @@ export interface Task {
   order?: number;
   /** Promoted to the top "任務" panel (Feishu-style). */
   pinned?: boolean;
+  /** Parked in the staging ("暫放") area — off the day board until re-scheduled. */
+  parked?: boolean;
 }
 
 export interface Habit {

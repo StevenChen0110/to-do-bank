@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { format, parse } from 'date-fns';
 import {
-  AlertTriangle,
   CalendarClock,
   ChevronDown,
   Circle,
   GripVertical,
+  Inbox,
   Sun,
   Trash2,
 } from 'lucide-react';
@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface OverdueRailProps {
-  /** Pending, non-habit tasks whose scheduledDate is before today. */
+  /** Overdue + parked tasks shown in the staging area. */
   tasks: Task[];
   todayKey: string;
   onComplete: (taskId: string) => void;
@@ -27,13 +27,17 @@ interface OverdueRailProps {
   onReschedule: (taskId: string, date: string) => void;
   /** Render bare (no outer card) — for nesting inside the 安排 block. */
   embedded?: boolean;
-  /** When true, rows carry a drag handle (drop onto a week day to reschedule). */
+  /** When true, rows carry a drag handle (drag onto a day, or back here). */
   draggable?: boolean;
   /** Whether the item list starts expanded. */
   defaultOpen?: boolean;
+  /** Force the list open (e.g. while dragging, so it's a visible drop target). */
+  forceOpen?: boolean;
+  /** Droppable id — makes the zone accept drops (park a task here). */
+  droppableId?: string;
 }
 
-function OverdueRow({
+function StagingRow({
   task,
   todayKey,
   draggable,
@@ -56,6 +60,7 @@ function OverdueRow({
     disabled: !draggable,
   });
   const d = parse(task.scheduledDate, 'yyyy-MM-dd', new Date());
+  const overdue = task.scheduledDate < todayKey;
 
   return (
     <li
@@ -71,8 +76,8 @@ function OverdueRow({
           {...attributes}
           {...listeners}
           className="shrink-0 cursor-grab touch-none text-muted-foreground/50 active:cursor-grabbing"
-          aria-label={`拖曳 ${task.title} 到某天`}
-          title="拖到週看板某天安排"
+          aria-label={`拖曳 ${task.title}`}
+          title="拖到某天安排，或放回暫放區"
         >
           <GripVertical className="h-4 w-4" />
         </span>
@@ -88,9 +93,15 @@ function OverdueRow({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{task.title}</p>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline" className="border-amber-500/50 text-amber-600">
-            {format(d, 'M/d')} 逾期
-          </Badge>
+          {overdue ? (
+            <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+              {format(d, 'M/d')} 逾期
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-primary/30 text-primary">
+              暫放
+            </Badge>
+          )}
           <Badge variant="muted">{labelForCategory(task.category, customCategories)}</Badge>
         </div>
       </div>
@@ -133,7 +144,7 @@ function OverdueRow({
   );
 }
 
-/** Always-on overdue lane — the "migration" surface: decide, reschedule, or drop. */
+/** Staging / overdue lane — a parking area you can drag tasks in and out of. */
 export function OverdueRail({
   tasks,
   todayKey,
@@ -144,43 +155,63 @@ export function OverdueRail({
   embedded = false,
   draggable = false,
   defaultOpen = true,
+  forceOpen = false,
+  droppableId,
 }: OverdueRailProps) {
   const [open, setOpen] = useState(defaultOpen);
-  if (tasks.length === 0) return null;
+  const { setNodeRef, isOver } = useDroppable({ id: droppableId ?? '__staging_noop__' });
+  const isDrop = Boolean(droppableId);
+  const listOpen = open || forceOpen;
+
+  // Without a drop zone, an empty rail renders nothing.
+  if (!isDrop && tasks.length === 0) return null;
 
   return (
     <section className={cn(!embedded && 'rounded-xl border border-amber-500/40 bg-amber-50/40')}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
+        aria-expanded={listOpen}
         className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-amber-700"
       >
-        <AlertTriangle className="h-4 w-4" />
-        逾期
+        <Inbox className="h-4 w-4" />
+        暫放
         <Badge variant="outline" className="border-amber-500/50 text-amber-600">
           {tasks.length}
         </Badge>
         <span className="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground">
-          {draggable ? '拖進日子・改期・完成' : '改期或完成'}
-          <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
+          {draggable ? '拖進日子／放回這裡' : '改期或完成'}
+          <ChevronDown className={cn('h-4 w-4 transition-transform', listOpen && 'rotate-180')} />
         </span>
       </button>
 
-      {open && (
-        <ul className="space-y-2 px-4 pb-4">
-          {tasks.map((task) => (
-            <OverdueRow
-              key={task.id}
-              task={task}
-              todayKey={todayKey}
-              draggable={draggable}
-              onComplete={onComplete}
-              onDelete={onDelete}
-              onMoveToToday={onMoveToToday}
-              onReschedule={onReschedule}
-            />
-          ))}
+      {listOpen && (
+        <ul
+          ref={isDrop ? setNodeRef : undefined}
+          className={cn(
+            'space-y-2 px-4 pb-4',
+            isDrop && 'min-h-[2.5rem] rounded-lg',
+            isOver && 'bg-amber-100/60 ring-1 ring-amber-400/50',
+          )}
+        >
+          {tasks.length === 0 ? (
+            <li className="rounded-lg border border-dashed border-amber-400/50 px-3 py-3 text-center text-[11px] text-muted-foreground">
+              把待辦拖到這裡暫放
+            </li>
+          ) : (
+            tasks.map((task) => (
+              <StagingRow
+                key={task.id}
+                task={task}
+                todayKey={todayKey}
+                draggable={draggable}
+                onComplete={onComplete}
+                onDelete={onDelete}
+                onMoveToToday={onMoveToToday}
+                onReschedule={onReschedule}
+              />
+            ))
+          )}
         </ul>
       )}
     </section>

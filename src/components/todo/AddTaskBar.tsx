@@ -7,11 +7,16 @@ import { QuickAddInput } from './QuickAddInput';
 import { OverdueRail } from './OverdueRail';
 import { cn } from '@/lib/utils';
 
+/** Droppable id for the staging ("暫放") area. */
+export const STAGING_ID = 'staging';
+
 interface AddTaskBarProps {
-  /** Overdue tasks — nested under 安排; drag into a week day to reschedule. */
+  /** Overdue + parked tasks — the 暫放 area; drag a day task here to park it. */
   overdueTasks: Task[];
   todayKey: string;
   overdueDraggable?: boolean;
+  /** Force the panel + staging open (e.g. while a drag is in progress). */
+  forceOpen?: boolean;
   onComplete: (taskId: string) => void;
   onDelete: (taskId: string) => void;
   onMoveToToday: (taskId: string) => void;
@@ -19,13 +24,14 @@ interface AddTaskBarProps {
 }
 
 /**
- * 安排 — collapsible planning panel. Expand to add a todo and to reach 逾期
- * (which itself expands to the overdue items you can drag onto a day).
+ * 安排 — collapsible planning panel: add a todo, and a 暫放 area you can drag
+ * tasks into and out of. Opens automatically while dragging so parking is easy.
  */
 export function AddTaskBar({
   overdueTasks,
   todayKey,
   overdueDraggable = false,
+  forceOpen = false,
   onComplete,
   onDelete,
   onMoveToToday,
@@ -33,6 +39,7 @@ export function AddTaskBar({
 }: AddTaskBarProps) {
   const [open, setOpen] = useState(false);
   const [planDate, setPlanDate] = useState(todayKey);
+  const isOpen = open || forceOpen;
 
   return (
     <section className="overflow-hidden rounded-xl border border-primary/30 bg-primary/5">
@@ -40,7 +47,7 @@ export function AddTaskBar({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
+          aria-expanded={isOpen}
           className="flex items-center gap-1.5 text-sm font-semibold text-primary"
         >
           <Plus className="h-4 w-4" />
@@ -48,10 +55,10 @@ export function AddTaskBar({
         </button>
         {overdueTasks.length > 0 && (
           <Badge variant="outline" className="border-amber-500/50 text-amber-600">
-            逾期 {overdueTasks.length}
+            暫放 {overdueTasks.length}
           </Badge>
         )}
-        {open && (
+        {isOpen && (
           <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
             安排到
             <Input
@@ -66,29 +73,30 @@ export function AddTaskBar({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-label={open ? '收合安排' : '展開安排'}
-          className={cn('shrink-0 text-primary', !open && 'ml-auto')}
+          aria-expanded={isOpen}
+          aria-label={isOpen ? '收合安排' : '展開安排'}
+          className={cn('shrink-0 text-primary', !isOpen && 'ml-auto')}
         >
-          <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
+          <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')} />
         </button>
       </div>
 
-      {open && (
+      {isOpen && (
         <div className="border-t border-primary/10 px-4 py-3">
           <QuickAddInput scheduledDate={planDate} />
           <p className="mt-2 text-[11px] text-muted-foreground">
-            旗子＝緊急（浮到當天最前）、圖釘＝設為任務（置頂）。也可在「本週」看板每天底下快速加。
+            旗子＝緊急、圖釘＝設為任務。把日子裡的待辦拖到「暫放」可先擱著，之後再拖回某天。
           </p>
         </div>
       )}
 
-      {/* 逾期：展開安排後可見，再展開看到細項（可拖到某天） */}
-      {open && overdueTasks.length > 0 && (
+      {/* 暫放區：可把待辦拖進來擱著，也可拖出去排到某天 */}
+      {isOpen && (
         <div className="border-t border-primary/10">
           <OverdueRail
             embedded
-            defaultOpen={false}
+            droppableId={STAGING_ID}
+            forceOpen={forceOpen}
             draggable={overdueDraggable}
             tasks={overdueTasks}
             todayKey={todayKey}

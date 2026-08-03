@@ -8,6 +8,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Eye,
+  EyeOff,
   Plus,
 } from 'lucide-react';
 import {
@@ -34,7 +36,7 @@ import { TaskList } from '@/components/todo/TaskList';
 import { TaskItem } from '@/components/todo/TaskItem';
 import { PlanBoard } from '@/components/todo/PlanBoard';
 import { WeekGrid, DAY_PREFIX } from '@/components/todo/WeekBoard';
-import { AddTaskBar } from '@/components/todo/AddTaskBar';
+import { AddTaskBar, STAGING_ID } from '@/components/todo/AddTaskBar';
 import { TaskPanel } from '@/components/todo/TaskPanel';
 import { JournalSection } from '@/components/todo/JournalSection';
 import { Input } from '@/components/ui/input';
@@ -64,6 +66,7 @@ export function TodoLogPage() {
   const todayKey = localDateString();
   const [mode, setMode] = useState<Mode>('plan');
   const [lens, setLens] = useState<Lens>('week');
+  const [showCompleted, setShowCompleted] = useState(true);
   const [filterCat, setFilterCat] = useState<string>('all');
 
   // 週計畫：錨定週內任一天，往前/後翻週
@@ -92,6 +95,7 @@ export function TodoLogPage() {
   const logCompletedTask = useAppStore((s) => s.logCompletedTask);
   const setTaskOrder = useAppStore((s) => s.setTaskOrder);
   const moveTaskToDay = useAppStore((s) => s.moveTaskToDay);
+  const parkTask = useAppStore((s) => s.parkTask);
   const toggleTaskUrgent = useAppStore((s) => s.toggleTaskUrgent);
   const toggleTaskPin = useAppStore((s) => s.toggleTaskPin);
   const settings = useAppStore((s) => s.settings);
@@ -177,6 +181,7 @@ export function TodoLogPage() {
       (t) =>
         t.completedAt === null &&
         !t.pinned &&
+        !t.parked &&
         t.source?.type !== 'habit' &&
         t.scheduledDate >= todayKey &&
         !(from && t.scheduledDate < from) &&
@@ -218,25 +223,28 @@ export function TodoLogPage() {
     [tasks],
   );
 
-  // 逾期常駐軌：過去未完成、非習慣、未置頂（緊急優先、日期最舊在前）。
-  const overdueTasks = useMemo(
-    () =>
-      catFiltered
-        .filter(
-          (t) =>
-            t.completedAt === null &&
-            !t.pinned &&
-            t.source?.type !== 'habit' &&
-            t.scheduledDate < todayKey,
-        )
-        .sort((a, b) => {
-          const au = a.priority === 'high' ? 0 : 1;
-          const bu = b.priority === 'high' ? 0 : 1;
-          if (au !== bu) return au - bu;
-          return a.scheduledDate.localeCompare(b.scheduledDate);
-        }),
-    [catFiltered, todayKey],
-  );
+  // 逾期軌：過去未完成、非習慣、未置頂（緊急優先、日期最舊在前）。
+  // 在「本週」鏡頭，落在目前顯示這一週的逾期改由看板呈現，避免重複與拖曳 id 衝突。
+  const overdueTasks = useMemo(() => {
+    const weekStart = localDateString(
+      startOfWeek(parse(weekAnchor, 'yyyy-MM-dd', new Date()), { weekStartsOn: 1 }),
+    );
+    return catFiltered
+      .filter(
+        (t) =>
+          t.completedAt === null &&
+          !t.pinned &&
+          t.source?.type !== 'habit' &&
+          (t.parked ||
+            (t.scheduledDate < todayKey && !(lens === 'week' && t.scheduledDate >= weekStart))),
+      )
+      .sort((a, b) => {
+        const au = a.priority === 'high' ? 0 : 1;
+        const bu = b.priority === 'high' ? 0 : 1;
+        if (au !== bu) return au - bu;
+        return a.scheduledDate.localeCompare(b.scheduledDate);
+      });
+  }, [catFiltered, todayKey, lens, weekAnchor]);
 
   // 週計畫：本週（週一起）7 天的 key，與各天的待辦（緊急優先＋手動排序）。
   const weekDates = useMemo(() => {
@@ -246,18 +254,15 @@ export function TodoLogPage() {
     return Array.from({ length: 7 }, (_, i) => localDateString(addDays(start, i)));
   }, [weekAnchor]);
 
-  // 只顯示今天(含)以後的日子；過去的交給「逾期軌」。
-  const visibleWeekDates = useMemo(
-    () => weekDates.filter((dk) => dk >= todayKey),
-    [weekDates, todayKey],
-  );
+  // 顯示完整一週（含已過的日子），看得到整週狀況。
+  const visibleWeekDates = weekDates;
 
   const weekTasksByDay = useMemo(() => {
     const set = new Set(visibleWeekDates);
     const map = new Map<string, typeof tasks>();
     for (const dk of visibleWeekDates) map.set(dk, []);
     for (const t of catFiltered) {
-      if (t.completedAt !== null || t.pinned) continue;
+      if (t.completedAt !== null || t.pinned || t.parked) continue;
       if (t.source?.type === 'habit') continue; // 習慣進「今日習慣」軌
       if (!set.has(t.scheduledDate)) continue;
       map.get(t.scheduledDate)!.push(t);
@@ -272,6 +277,22 @@ export function TodoLogPage() {
         if (ao !== bo) return ao - bo;
         return b.createdAt.localeCompare(a.createdAt);
       });
+    }
+    return map;
+  }, [catFiltered, visibleWeekDates]);
+
+  // 本週各天「已完成」的待辦（劃線顯示，可用開關隱藏）。
+  const completedByDay = useMemo(() => {
+    const set = new Set(visibleWeekDates);
+    const map = new Map<string, typeof tasks>();
+    for (const dk of visibleWeekDates) map.set(dk, []);
+    for (const t of catFiltered) {
+      if (t.completedAt === null || t.source?.type === 'habit') continue;
+      if (!set.has(t.scheduledDate)) continue;
+      map.get(t.scheduledDate)!.push(t);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
     }
     return map;
   }, [catFiltered, visibleWeekDates]);
@@ -294,6 +315,7 @@ export function TodoLogPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const weekDnd = useMemo(() => {
     const dayOfTask = new Map<string, string>();
@@ -315,10 +337,18 @@ export function TodoLogPage() {
 
   const handlePlanDragEnd = (e: DragEndEvent) => {
     setActiveDragId(null);
+    setDragActive(false);
     const { active, over } = e;
     if (!over) return;
     const activeId = active.id as string;
     const overId = over.id as string;
+
+    // 拖回暫放區 → 擱著（離開日期看板）
+    if (overId === STAGING_ID) {
+      parkTask(activeId);
+      return;
+    }
+
     const targetDay = overId.startsWith(DAY_PREFIX)
       ? overId.slice(DAY_PREFIX.length)
       : weekDnd.dayOfTask.get(overId);
@@ -394,9 +424,15 @@ export function TodoLogPage() {
     <DndContext
       sensors={dndSensors}
       collisionDetection={closestCorners}
-      onDragStart={(e: DragStartEvent) => setActiveDragId(e.active.id as string)}
+      onDragStart={(e: DragStartEvent) => {
+        setActiveDragId(e.active.id as string);
+        setDragActive(true);
+      }}
       onDragEnd={handlePlanDragEnd}
-      onDragCancel={() => setActiveDragId(null)}
+      onDragCancel={() => {
+        setActiveDragId(null);
+        setDragActive(false);
+      }}
     >
       <div className="flex flex-col gap-4">
         {/* 任務面板（置頂） */}
@@ -442,6 +478,7 @@ export function TodoLogPage() {
           overdueTasks={overdueTasks}
           todayKey={todayKey}
           overdueDraggable={lens === 'week'}
+          forceOpen={dragActive && lens === 'week'}
           onComplete={handleComplete}
           onDelete={handleDelete}
           onMoveToToday={(id) => moveTaskToDay(id, todayKey, [])}
@@ -548,16 +585,34 @@ export function TodoLogPage() {
             </Button>
           </div>
 
-          <p className="text-[11px] text-muted-foreground">
-            直接拖曳任務在各天之間移動來安排這週；每天底下可快速加事情，往「下週」翻就能規劃未來，全程不用選日期。
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              拖曳任務跨天安排；往「下週」翻可規劃未來。
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowCompleted((v) => !v)}
+              aria-pressed={showCompleted}
+              className="flex shrink-0 items-center gap-1 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            >
+              {showCompleted ? (
+                <Eye className="h-3.5 w-3.5" />
+              ) : (
+                <EyeOff className="h-3.5 w-3.5" />
+              )}
+              已完成
+            </button>
+          </div>
 
           <WeekGrid
             weekDates={visibleWeekDates}
             todayKey={todayKey}
             tasksByDay={weekTasksByDay}
+            completedByDay={completedByDay}
+            showCompleted={showCompleted}
             onDelete={handleDelete}
             onComplete={handleComplete}
+            onUncomplete={handleUncomplete}
           />
             </>
           ) : (

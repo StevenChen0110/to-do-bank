@@ -68,8 +68,10 @@ interface AppStore extends PersistableState {
     taskId: string,
     patch: Partial<Pick<Task, 'title' | 'category' | 'reward'>>,
   ) => void;
-  /** Move a task to another day; orderedIds = new order of that day's ids. */
+  /** Move a task to another day; orderedIds = new order of that day's ids. Un-parks. */
   moveTaskToDay: (taskId: string, date: string, orderedIds: string[]) => void;
+  /** Park a task into the staging ("暫放") area (off the day board). */
+  parkTask: (taskId: string) => void;
   setTaskPriority: (taskId: string, priority: TaskPriority) => void;
   /** Toggle a task's urgent (high-priority) flag on/off. */
   toggleTaskUrgent: (taskId: string) => void;
@@ -546,10 +548,22 @@ export const useAppStore = create<AppStore>((set) => ({
         ...state,
         tasks: state.tasks.map((t) => {
           if (t.id === taskId) {
-            return { ...t, scheduledDate: date, order: pos.get(t.id) ?? t.order };
+            // Scheduling onto a day also un-parks it.
+            return { ...t, scheduledDate: date, order: pos.get(t.id) ?? t.order, parked: false };
           }
           return pos.has(t.id) ? { ...t, order: pos.get(t.id) } : t;
         }),
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  parkTask: (taskId) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, parked: true } : t)),
       };
       schedulePersist(toPersistable(next));
       return next;

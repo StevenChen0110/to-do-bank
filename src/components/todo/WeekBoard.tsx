@@ -18,8 +18,12 @@ interface WeekGridProps {
   todayKey: string;
   /** Pending tasks that fall within the week, keyed by day. */
   tasksByDay: Map<string, Task[]>;
+  /** Completed tasks per day (shown struck-through when showCompleted). */
+  completedByDay: Map<string, Task[]>;
+  showCompleted: boolean;
   onDelete: (taskId: string) => void;
   onComplete: (taskId: string) => void;
+  onUncomplete: (taskId: string) => void;
 }
 
 function SortableRow({
@@ -54,17 +58,22 @@ function DayColumn({
   dk,
   todayKey,
   tasks,
+  completedTasks,
   onDelete,
   onComplete,
+  onUncomplete,
 }: {
   dk: string;
   todayKey: string;
   tasks: Task[];
+  completedTasks: Task[];
   onDelete: (taskId: string) => void;
   onComplete: (taskId: string) => void;
+  onUncomplete: (taskId: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const isToday = dk === todayKey;
+  const isPast = dk < todayKey;
   const { setNodeRef, isOver } = useDroppable({ id: `${DAY_PREFIX}${dk}` });
   const ids = tasks.map((t) => t.id);
   const d = parse(dk, 'yyyy-MM-dd', new Date());
@@ -83,12 +92,19 @@ function DayColumn({
         aria-expanded={open}
         className={cn('mb-2 flex w-full items-center justify-between', !open && 'mb-0')}
       >
-        <h3 className={cn('text-sm font-semibold', isToday && 'text-primary')}>
+        <h3
+          className={cn(
+            'text-sm font-semibold',
+            isToday && 'text-primary',
+            isPast && 'text-muted-foreground',
+          )}
+        >
           {format(d, 'EEEE', { locale: zhTW })}
           <span className="ml-1.5 text-xs font-normal text-muted-foreground">
             {format(d, 'M/d')}
           </span>
           {isToday && <span className="ml-1.5 text-[10px] text-primary">今天</span>}
+          {isPast && <span className="ml-1.5 text-[10px] text-amber-600">逾期</span>}
         </h3>
         <span className="flex items-center gap-1 text-xs text-muted-foreground">
           {tasks.length} 件
@@ -97,18 +113,35 @@ function DayColumn({
       </button>
 
       {open && (
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          <ul ref={setNodeRef} className="min-h-[2.5rem] space-y-2">
-            {tasks.length === 0 && (
-              <li className="rounded-lg border border-dashed border-border/60 px-3 py-3 text-center text-[11px] text-muted-foreground/70">
-                拖到這裡安排
-              </li>
-            )}
-            {tasks.map((task) => (
-              <SortableRow key={task.id} task={task} onDelete={onDelete} onComplete={onComplete} />
-            ))}
-          </ul>
-        </SortableContext>
+        <>
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            <ul ref={setNodeRef} className="min-h-[2.5rem] space-y-2">
+              {tasks.length === 0 && completedTasks.length === 0 && (
+                <li className="rounded-lg border border-dashed border-border/60 px-3 py-3 text-center text-[11px] text-muted-foreground/70">
+                  拖到這裡安排
+                </li>
+              )}
+              {tasks.map((task) => (
+                <SortableRow key={task.id} task={task} onDelete={onDelete} onComplete={onComplete} />
+              ))}
+            </ul>
+          </SortableContext>
+
+          {completedTasks.length > 0 && (
+            <ul className="mt-2 space-y-2 border-t border-border/60 pt-2 opacity-55 transition-opacity hover:opacity-90">
+              {completedTasks.map((task) => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  compact
+                  onDelete={onDelete}
+                  onComplete={onComplete}
+                  onUncomplete={onUncomplete}
+                />
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </section>
   );
@@ -116,17 +149,28 @@ function DayColumn({
 
 /** The 7-day grid. Relies on a DndContext provided by the parent (so the
  *  overdue lane above can drop into these days). */
-export function WeekGrid({ weekDates, todayKey, tasksByDay, onDelete, onComplete }: WeekGridProps) {
+export function WeekGrid({
+  weekDates,
+  todayKey,
+  tasksByDay,
+  completedByDay,
+  showCompleted,
+  onDelete,
+  onComplete,
+  onUncomplete,
+}: WeekGridProps) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="flex flex-col gap-3">
       {weekDates.map((dk) => (
         <DayColumn
           key={dk}
           dk={dk}
           todayKey={todayKey}
           tasks={tasksByDay.get(dk) ?? []}
+          completedTasks={showCompleted ? completedByDay.get(dk) ?? [] : []}
           onDelete={onDelete}
           onComplete={onComplete}
+          onUncomplete={onUncomplete}
         />
       ))}
     </div>
