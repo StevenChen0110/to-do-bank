@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   ListChecks,
+  NotebookPen,
   Settings,
   Sparkles,
   Sprout,
@@ -10,6 +11,7 @@ import { cn } from '@/lib/utils';
 export type AppTab =
   | 'dashboard'
   | 'todo'
+  | 'journal'
   | 'wishes'
   | 'growth'
   | 'settings';
@@ -21,6 +23,7 @@ export const TABS: {
 }[] = [
   { id: 'dashboard', label: '撲滿', icon: LayoutDashboard },
   { id: 'todo', label: '待辦', icon: ListChecks },
+  { id: 'journal', label: '日記', icon: NotebookPen },
   { id: 'wishes', label: '願望', icon: Sparkles },
   { id: 'growth', label: '養成', icon: Sprout },
   { id: 'settings', label: '設定', icon: Settings },

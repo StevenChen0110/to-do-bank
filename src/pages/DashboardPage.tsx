@@ -32,11 +32,21 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const toggleTaskUrgent = useAppStore((s) => s.toggleTaskUrgent);
   const { balance, totalEarned } = useBalance();
   const allTasks = useAppStore((s) => s.tasks);
-  const todayTasks = useTodayTasks();
+  const todayAll = useTodayTasks();
+  // Habits live in 習慣總覽 — keep them out of the 今日待辦 list.
+  const todayTasks = useMemo(
+    () => todayAll.filter((t) => t.source?.type !== 'habit'),
+    [todayAll],
+  );
   const upcomingTasks = useMemo(() => {
     const todayKey = localDateString();
     return allTasks
-      .filter((t) => t.completedAt === null && t.scheduledDate > todayKey)
+      .filter(
+        (t) =>
+          t.completedAt === null &&
+          t.scheduledDate > todayKey &&
+          t.source?.type !== 'habit',
+      )
       .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
   }, [allTasks]);
   const pinnedTasks = useMemo(

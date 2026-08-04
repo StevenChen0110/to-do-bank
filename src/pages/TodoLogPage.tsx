@@ -38,7 +38,6 @@ import { PlanBoard } from '@/components/todo/PlanBoard';
 import { WeekGrid, DAY_PREFIX } from '@/components/todo/WeekBoard';
 import { AddTaskBar, STAGING_ID } from '@/components/todo/AddTaskBar';
 import { TaskPanel } from '@/components/todo/TaskPanel';
-import { JournalSection } from '@/components/todo/JournalSection';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -783,9 +782,6 @@ export function TodoLogPage() {
               })}
             </div>
           )}
-
-          {/* 今日記事（日記併入紀錄；自動儲存＋入帳徽章） */}
-          <JournalSection dateKey={todayKey} />
         </>
       )}
       </div>

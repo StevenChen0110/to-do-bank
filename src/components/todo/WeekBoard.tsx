@@ -59,6 +59,7 @@ function DayColumn({
   todayKey,
   tasks,
   completedTasks,
+  completedCount,
   onDelete,
   onComplete,
   onUncomplete,
@@ -67,6 +68,8 @@ function DayColumn({
   todayKey: string;
   tasks: Task[];
   completedTasks: Task[];
+  /** Total completed for the day — shown even when the list is hidden. */
+  completedCount: number;
   onDelete: (taskId: string) => void;
   onComplete: (taskId: string) => void;
   onUncomplete: (taskId: string) => void;
@@ -108,6 +111,9 @@ function DayColumn({
         </h3>
         <span className="flex items-center gap-1 text-xs text-muted-foreground">
           {tasks.length} 件
+          {completedCount > 0 && (
+            <span className="text-emerald-600">· 完成 {completedCount}</span>
+          )}
           <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
         </span>
       </button>
@@ -168,6 +174,7 @@ export function WeekGrid({
           todayKey={todayKey}
           tasks={tasksByDay.get(dk) ?? []}
           completedTasks={showCompleted ? completedByDay.get(dk) ?? [] : []}
+          completedCount={(completedByDay.get(dk) ?? []).length}
           onDelete={onDelete}
           onComplete={onComplete}
           onUncomplete={onUncomplete}

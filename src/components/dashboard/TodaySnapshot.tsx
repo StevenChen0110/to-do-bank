@@ -1,10 +1,11 @@
 import { addDays, format, parse } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
-import { CalendarClock, CheckCircle2, Circle, ClipboardList, ListTodo } from 'lucide-react';
+import { CheckCircle2, Circle, ClipboardList, ListTodo } from 'lucide-react';
 import type { Task } from '@/types';
 import { localDateString } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { SectionGroup } from './SectionGroup';
 
 interface TodaySnapshotProps {
   tasks: Task[];
@@ -89,73 +90,78 @@ export function TodaySnapshot({
             </button>
           </div>
         ) : (
-          <ul className="space-y-1.5">
-            {/* Pending — tappable */}
-            {pending.map((task) => (
-              <li key={task.id} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onComplete(task.id)}
-                  aria-label={`完成 ${task.title}`}
-                  className="shrink-0 text-muted-foreground transition-colors hover:text-primary active:scale-90"
-                >
-                  <Circle className="h-4 w-4" />
-                </button>
-                <span className="flex-1 truncate text-sm">{task.title}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  +{formatCurrency(task.reward)}
-                </span>
-              </li>
-            ))}
-
-            {/* Divider between pending / completed */}
-            {pending.length > 0 && completed.length > 0 && (
-              <li aria-hidden className="border-t border-border pt-0.5" />
+          <div className="space-y-2 pb-1">
+            {/* 未完成 — tappable, foldable */}
+            {pending.length > 0 && (
+              <SectionGroup label="未完成" count={pending.length} accent="orange">
+                <ul className="space-y-1.5">
+                  {pending.map((task) => (
+                    <li key={task.id} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onComplete(task.id)}
+                        aria-label={`完成 ${task.title}`}
+                        className="shrink-0 text-muted-foreground transition-colors hover:text-primary active:scale-90"
+                      >
+                        <Circle className="h-4 w-4" />
+                      </button>
+                      <span className="flex-1 truncate text-sm">{task.title}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        +{formatCurrency(task.reward)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </SectionGroup>
             )}
 
-            {/* Completed */}
-            {completed.map((task) => (
-              <li key={task.id} className="flex items-center gap-2">
-                <CheckCircle2 className={cn('h-4 w-4 shrink-0 text-primary')} />
-                <span className="flex-1 truncate text-sm text-muted-foreground line-through">
-                  {task.title}
-                </span>
-                <span className="shrink-0 text-xs font-medium text-primary">
-                  +{formatCurrency(task.reward)}
-                </span>
-              </li>
-            ))}
-          </ul>
+            {/* 已完成 — foldable */}
+            {completed.length > 0 && (
+              <SectionGroup label="已完成" count={completed.length} accent="primary">
+                <ul className="space-y-1.5">
+                  {completed.map((task) => (
+                    <li key={task.id} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="flex-1 truncate text-sm text-muted-foreground line-through">
+                        {task.title}
+                      </span>
+                      <span className="shrink-0 text-xs font-medium text-primary">
+                        +{formatCurrency(task.reward)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </SectionGroup>
+            )}
+          </div>
         )}
 
-        {/* Upcoming — future-dated pending tasks */}
+        {/* 未來待辦 — future-dated pending tasks, foldable */}
         {upcomingTasks.length > 0 && (
-          <div className={cn('pb-1', total > 0 && 'mt-3 border-t border-border pt-3')}>
-            <p className="mb-1.5 flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              <CalendarClock className="h-3.5 w-3.5" />
-              未來待辦
-            </p>
-            <ul className="space-y-1.5">
-              {upcomingTasks.map((task) => (
-                <li key={task.id} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onComplete(task.id)}
-                    aria-label={`提前完成 ${task.title}`}
-                    className="shrink-0 text-muted-foreground transition-colors hover:text-primary active:scale-90"
-                  >
-                    <Circle className="h-4 w-4" />
-                  </button>
-                  <span className="flex-1 truncate text-sm">{task.title}</span>
-                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    {upcomingLabel(task.scheduledDate, todayKey)}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    +{formatCurrency(task.reward)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          <div className={cn('pb-1', total > 0 && 'mt-2 border-t border-border pt-2')}>
+            <SectionGroup label="未來待辦" count={upcomingTasks.length} defaultOpen={false}>
+              <ul className="space-y-1.5">
+                {upcomingTasks.map((task) => (
+                  <li key={task.id} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onComplete(task.id)}
+                      aria-label={`提前完成 ${task.title}`}
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-primary active:scale-90"
+                    >
+                      <Circle className="h-4 w-4" />
+                    </button>
+                    <span className="flex-1 truncate text-sm">{task.title}</span>
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {upcomingLabel(task.scheduledDate, todayKey)}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      +{formatCurrency(task.reward)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </SectionGroup>
           </div>
         )}
       </div>
