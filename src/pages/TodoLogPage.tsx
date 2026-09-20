@@ -5,8 +5,6 @@ import {
   ArrowDownUp,
   CalendarDays,
   CalendarRange,
-  ChevronLeft,
-  ChevronRight,
   ClipboardList,
   Eye,
   EyeOff,
@@ -36,7 +34,9 @@ import { TaskList } from '@/components/todo/TaskList';
 import { TaskItem } from '@/components/todo/TaskItem';
 import { PlanBoard } from '@/components/todo/PlanBoard';
 import { WeekGrid, DAY_PREFIX } from '@/components/todo/WeekBoard';
-import { AddTaskBar, STAGING_ID } from '@/components/todo/AddTaskBar';
+import { WeekCapsules, CAP_PREFIX } from '@/components/todo/WeekCapsules';
+import { OverdueRail, STAGING_ID } from '@/components/todo/OverdueRail';
+import { QuickAddFab } from '@/components/todo/QuickAddFab';
 import { TaskPanel } from '@/components/todo/TaskPanel';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,8 @@ export function TodoLogPage() {
 
   // 週計畫：錨定週內任一天，往前/後翻週
   const [weekAnchor, setWeekAnchor] = useState(todayKey);
+  // 聚焦的那一天（今日為主）——膠囊點選 / 拖曳改期都圍繞它
+  const [focusDay, setFocusDay] = useState(todayKey);
   // 計畫 time range
   const [planRange, setPlanRange] = useState<PlanRange>('all');
   const [planFrom, setPlanFrom] = useState('');
@@ -302,10 +304,21 @@ export function TodoLogPage() {
     return `${format(s, 'M/d')} – ${format(e, 'M/d')}`;
   }, [weekDates]);
 
-  const shiftWeek = (delta: number) =>
-    setWeekAnchor((cur) =>
-      localDateString(addDays(parse(cur, 'yyyy-MM-dd', new Date()), delta * 7)),
+  const shiftWeek = (delta: number) => {
+    const next = localDateString(
+      addDays(parse(weekAnchor, 'yyyy-MM-dd', new Date()), delta * 7),
     );
+    setWeekAnchor(next);
+    const monday = startOfWeek(parse(next, 'yyyy-MM-dd', new Date()), { weekStartsOn: 1 });
+    const days = Array.from({ length: 7 }, (_, i) => localDateString(addDays(monday, i)));
+    // Land the focus on today if the new week contains it, else its Monday.
+    setFocusDay(days.includes(todayKey) ? todayKey : days[0]);
+  };
+
+  const goToday = () => {
+    setWeekAnchor(todayKey);
+    setFocusDay(todayKey);
+  };
 
   // 拖曳環境：週看板日欄 + 逾期積木共用（逾期可從整理區拖進某天）
   const dndSensors = useSensors(
@@ -345,6 +358,15 @@ export function TodoLogPage() {
     // 拖回暫放區 → 擱著（離開日期看板）
     if (overId === STAGING_ID) {
       parkTask(activeId);
+      return;
+    }
+
+    // 拖到週膠囊 → 改排到那一天（append 到該天末端）
+    if (overId.startsWith(CAP_PREFIX)) {
+      const day = overId.slice(CAP_PREFIX.length);
+      const targetIds = [...(weekDnd.idsByDay.get(day) ?? [])];
+      if (!targetIds.includes(activeId)) targetIds.push(activeId);
+      moveTaskToDay(activeId, day, targetIds);
       return;
     }
 
@@ -471,20 +493,6 @@ export function TodoLogPage() {
         ))}
       </div>
 
-      {/* 安排（逾期收於其下）：置於標籤上方 */}
-      {mode === 'plan' && (
-        <AddTaskBar
-          overdueTasks={overdueTasks}
-          todayKey={todayKey}
-          overdueDraggable={lens === 'week'}
-          forceOpen={dragActive && lens === 'week'}
-          onComplete={handleComplete}
-          onDelete={handleDelete}
-          onMoveToToday={(id) => moveTaskToDay(id, todayKey, [])}
-          onReschedule={(id, d) => moveTaskToDay(id, d, [])}
-        />
-      )}
-
       {/* 分類篩選（兩模式共用）＋日期排序方向 */}
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="分類篩選">
         <button
@@ -548,51 +556,26 @@ export function TodoLogPage() {
 
           {lens === 'week' ? (
             <>
-          {/* 週導覽 */}
-          <div className="flex items-center justify-between rounded-xl border border-border bg-card px-2 py-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="min-h-9"
-              onClick={() => shiftWeek(-1)}
-              aria-label="上一週"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              上週
-            </Button>
-            <div className="flex flex-col items-center leading-tight">
-              <span className="text-sm font-semibold">{weekLabel}</span>
-              <button
-                type="button"
-                onClick={() => setWeekAnchor(todayKey)}
-                className="text-[11px] text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
-              >
-                回到本週
-              </button>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="min-h-9"
-              onClick={() => shiftWeek(1)}
-              aria-label="下一週"
-            >
-              下週
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* 週膠囊：點選聚焦某天，拖曳任務到膠囊即改期 */}
+          <WeekCapsules
+            weekDates={visibleWeekDates}
+            todayKey={todayKey}
+            focusDay={focusDay}
+            countFor={(dk) => weekTasksByDay.get(dk)?.length ?? 0}
+            onFocus={setFocusDay}
+            onPrevWeek={() => shiftWeek(-1)}
+            onNextWeek={() => shiftWeek(1)}
+            onToday={goToday}
+            weekLabel={weekLabel}
+          />
 
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-muted-foreground">
-              拖曳任務跨天安排；往「下週」翻可規劃未來。
-            </p>
+          {/* 已完成顯示切換（新增改用右下角浮動按鈕） */}
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={() => setShowCompleted((v) => !v)}
               aria-pressed={showCompleted}
-              className="flex shrink-0 items-center gap-1 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+              className="flex shrink-0 items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
             >
               {showCompleted ? (
                 <Eye className="h-3.5 w-3.5" />
@@ -603,8 +586,9 @@ export function TodoLogPage() {
             </button>
           </div>
 
+          {/* 聚焦日清單（拖到上方膠囊可改天；拖到暫放區可擱著） */}
           <WeekGrid
-            weekDates={visibleWeekDates}
+            weekDates={[focusDay]}
             todayKey={todayKey}
             tasksByDay={weekTasksByDay}
             completedByDay={completedByDay}
@@ -659,7 +643,7 @@ export function TodoLogPage() {
           {/* 待辦清單（依日期，可拖曳跨日改期） */}
           {planGroups.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-              這段期間沒有待安排的事。用上方「安排待辦」加入今天或未來要做的事。
+              這段期間沒有待安排的事。點右下角的 ＋ 加入今天或未來要做的事。
             </p>
           ) : (
             <PlanBoard
@@ -676,6 +660,20 @@ export function TodoLogPage() {
           )}
             </>
           )}
+
+          {/* 暫放 / 逾期：拖到上方膠囊或聚焦日安排，也可擱著 */}
+          <OverdueRail
+            droppableId={STAGING_ID}
+            draggable={lens === 'week'}
+            forceOpen={dragActive && lens === 'week'}
+            defaultOpen={false}
+            tasks={overdueTasks}
+            todayKey={todayKey}
+            onComplete={handleComplete}
+            onDelete={handleDelete}
+            onMoveToToday={(id) => moveTaskToDay(id, todayKey, [])}
+            onReschedule={(id, d) => moveTaskToDay(id, d, [])}
+          />
         </>
       ) : (
         <>
@@ -785,6 +783,15 @@ export function TodoLogPage() {
         </>
       )}
       </div>
+
+      {/* 右下角浮動新增：用完即收，不再常駐頁面上方 */}
+      {mode === 'plan' && (
+        <QuickAddFab
+          scheduledDate={lens === 'week' ? focusDay : todayKey}
+          dateLabel={lens === 'week' ? dateLabel(focusDay) : '今天'}
+        />
+      )}
+
       <DragOverlay>
         {activeDragTask ? (
           <div className="w-[300px] max-w-[85vw]">

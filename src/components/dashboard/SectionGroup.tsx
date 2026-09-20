@@ -4,7 +4,8 @@ import { cn } from '@/lib/utils';
 
 interface SectionGroupProps {
   label: string;
-  count: number;
+  /** Optional count badge; omit to show just the label. */
+  count?: number;
   defaultOpen?: boolean;
   /** Colour of the count badge. */
   accent?: 'muted' | 'primary' | 'orange';
@@ -37,7 +38,9 @@ export function SectionGroup({
       >
         <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !open && '-rotate-90')} />
         {label}
-        <span className={cn('font-semibold', countColor)}>{count}</span>
+        {count !== undefined && (
+          <span className={cn('font-semibold', countColor)}>{count}</span>
+        )}
       </button>
       {open && <div className="mt-1">{children}</div>}
     </div>

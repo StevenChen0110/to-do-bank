@@ -7,8 +7,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#00804F" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Lets the app paint under the status bar; safe-area insets handle layout. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="To Do Bank" />
+    <meta name="application-name" content="To Do Bank" />
     <meta name="description" content="完成待辦，存進撲滿——自我獎勵待辦系統" />
+    <!-- Stop iOS auto-linking phone-number-like strings in task titles. -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- iOS launch image. A single flexible splash beats a wrong-sized set:
+         iOS scales it, so there's no black flash on cold start. -->
+    <link rel="apple-touch-startup-image" href="/pwa-512x512.png" />
+
     <title>To Do Bank</title>
   </head>
   <body>

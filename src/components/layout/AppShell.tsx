@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { PanelRight, PiggyBank, Settings } from 'lucide-react';
 import { isExtPopup, openSidePanel } from '@/lib/runtime';
 import { useAppStore } from '@/store/useAppStore';
@@ -7,13 +7,43 @@ import { RewardProvider } from '@/context/RewardContext';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { Toaster } from '@/components/effects/Toaster';
 import { GoalChip } from '@/components/layout/GoalChip';
+import { OfflineBanner } from '@/components/layout/OfflineBanner';
 import { TabNav, TABS, type AppTab } from './TabNav';
-import { DashboardPage } from '@/pages/DashboardPage';
-import { TodoLogPage } from '@/pages/TodoLogPage';
-import { JournalPage } from '@/pages/JournalPage';
-import { GrowthPage } from '@/pages/GrowthPage';
-import { WishlistPage } from '@/pages/WishlistPage';
-import { SettingsPage } from '@/pages/SettingsPage';
+
+const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
+
+/** Honour PWA manifest shortcuts (/?tab=work) on cold launch. */
+function initialTab(): AppTab {
+  if (typeof window === 'undefined') return 'jarvis';
+  const want = new URLSearchParams(window.location.search).get('tab');
+  return want && VALID_TABS.has(want) ? (want as AppTab) : 'jarvis';
+}
+// Pages are code-split so each tab loads on demand — the initial JARVIS
+// landing stays light instead of pulling in dnd-kit / framer-motion / radix.
+const JarvisPage = lazy(() =>
+  import('@/pages/JarvisPage').then((m) => ({ default: m.JarvisPage })),
+);
+const WorkPage = lazy(() =>
+  import('@/pages/WorkPage').then((m) => ({ default: m.WorkPage })),
+);
+const DashboardPage = lazy(() =>
+  import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+);
+const TodoLogPage = lazy(() =>
+  import('@/pages/TodoLogPage').then((m) => ({ default: m.TodoLogPage })),
+);
+const JournalPage = lazy(() =>
+  import('@/pages/JournalPage').then((m) => ({ default: m.JournalPage })),
+);
+const GrowthPage = lazy(() =>
+  import('@/pages/GrowthPage').then((m) => ({ default: m.GrowthPage })),
+);
+const WishlistPage = lazy(() =>
+  import('@/pages/WishlistPage').then((m) => ({ default: m.WishlistPage })),
+);
+const SettingsPage = lazy(() =>
+  import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+);
 import { localDateString } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +52,7 @@ function AppShellInner() {
   const hydrated = useAppStore((s) => s._hydrated);
   const materializeHabitTasks = useAppStore((s) => s.materializeHabitTasks);
   const { ready, user, storageKey } = useAuth();
-  const [tab, setTab] = useState<AppTab>('dashboard');
+  const [tab, setTab] = useState<AppTab>(initialTab);
 
   // Re-hydrate whenever the canonical storage key changes (login / link).
   useEffect(() => {
@@ -76,6 +106,7 @@ function AppShellInner() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+        <OfflineBanner />
         <div className="mx-auto flex max-w-5xl items-start justify-between gap-4 px-4 py-3 lg:px-6">
           <div className="flex min-w-0 shrink-0 items-start gap-2.5">
             <PiggyBank className="mt-px size-7 shrink-0 text-primary" aria-hidden />
@@ -143,13 +174,23 @@ function AppShellInner() {
         </aside>
 
         <main className="min-w-0 flex-1 px-4 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:px-6 lg:py-6 lg:pb-10">
-          <div className="mx-auto max-w-2xl">
-            {tab === 'dashboard' && <DashboardPage onNavigate={setTab} />}
-            {tab === 'todo' && <TodoLogPage />}
-            {tab === 'journal' && <JournalPage />}
-            {tab === 'wishes' && <WishlistPage />}
-            {tab === 'growth' && <GrowthPage />}
-            {tab === 'settings' && <SettingsPage />}
+          <div className={cn('mx-auto', tab === 'work' ? 'max-w-4xl' : 'max-w-2xl')}>
+            <Suspense
+              fallback={
+                <div className="flex justify-center py-16 text-sm text-muted-foreground">
+                  <span className="animate-pulse">載入中…</span>
+                </div>
+              }
+            >
+              {tab === 'jarvis' && <JarvisPage />}
+              {tab === 'work' && <WorkPage />}
+              {tab === 'dashboard' && <DashboardPage onNavigate={setTab} />}
+              {tab === 'todo' && <TodoLogPage />}
+              {tab === 'journal' && <JournalPage />}
+              {tab === 'wishes' && <WishlistPage />}
+              {tab === 'growth' && <GrowthPage />}
+              {tab === 'settings' && <SettingsPage />}
+            </Suspense>
           </div>
         </main>
       </div>

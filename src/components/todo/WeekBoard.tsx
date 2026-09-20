@@ -74,9 +74,10 @@ function DayColumn({
   onComplete: (taskId: string) => void;
   onUncomplete: (taskId: string) => void;
 }) {
-  const [open, setOpen] = useState(true);
   const isToday = dk === todayKey;
   const isPast = dk < todayKey;
+  // Past days collapse by default — unless they still hold unfinished tasks.
+  const [open, setOpen] = useState(!isPast || tasks.length > 0);
   const { setNodeRef, isOver } = useDroppable({ id: `${DAY_PREFIX}${dk}` });
   const ids = tasks.map((t) => t.id);
   const d = parse(dk, 'yyyy-MM-dd', new Date());

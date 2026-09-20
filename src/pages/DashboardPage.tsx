@@ -4,17 +4,16 @@ import { zhTW } from 'date-fns/locale';
 import { getDailyEarned } from '@/lib/calculations';
 import { localDateString } from '@/lib/dates';
 import { TaskPanel } from '@/components/todo/TaskPanel';
-import { formatPinnedGoalNarrative, isPinnedWishActive, resolveDashboardWish } from '@/lib/pinnedWish';
+import { formatPinnedGoalNarrative, isPinnedWishActive } from '@/lib/pinnedWish';
 import { playDepositChime, unlockAudioFromGesture } from '@/lib/sound';
 import { useBalance } from '@/hooks/useBalance';
-import { useJustUnlockedWishId } from '@/hooks/useJustUnlockedWishId';
 import { useTodayTasks } from '@/hooks/useTodayTasks';
 import { useAppStore } from '@/store/useAppStore';
 import { useReward } from '@/context/RewardContext';
 import { BalanceHero } from '@/components/dashboard/BalanceHero';
 import { TodaySnapshot } from '@/components/dashboard/TodaySnapshot';
 import { HabitsOverview } from '@/components/dashboard/HabitsOverview';
-import { NearestWishCard } from '@/components/dashboard/NearestWishCard';
+import { ShopTeaser } from '@/components/dashboard/ShopTeaser';
 import type { AppTab } from '@/components/layout/TabNav';
 
 interface DashboardPageProps {
@@ -72,8 +71,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
     return dk < todayKey ? `逾期 ${label}` : label;
   };
   const dailyEarned = getDailyEarned(transactions, new Date());
-  const { wish: dashboardWish, isPinned } = resolveDashboardWish(wishes, balance, pinnedWishId);
-  const justUnlockedId = useJustUnlockedWishId(wishes, balance);
   const { showToast } = useReward();
 
   const handleComplete = (taskId: string) => {
@@ -105,12 +102,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         dateLabel={dateChip}
       />
       <BalanceHero balance={balance} totalEarned={totalEarned} />
-      <NearestWishCard
-        wish={dashboardWish}
-        balance={balance}
-        isPinned={isPinned}
-        highlightUnlock={dashboardWish !== null && dashboardWish.id === justUnlockedId}
-      />
+      <ShopTeaser onNavigate={() => onNavigate('wishes')} />
       <TodaySnapshot
         tasks={todayTasks}
         upcomingTasks={upcomingTasks}

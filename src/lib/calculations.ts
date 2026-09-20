@@ -67,6 +67,35 @@ export function getDailyEarned(
     .reduce((sum, tx) => sum + tx.amount, 0);
 }
 
+/** Average NT$ earned per day over the last `days` days (net of revokes). */
+export function getDailyEarnRate(transactions: Transaction[], days = 14): number {
+  if (days <= 0) return 0;
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+  since.setDate(since.getDate() - (days - 1));
+  const earned = transactions
+    .filter(
+      (tx) =>
+        (tx.type === 'task_complete' || tx.type === 'task_revoke') &&
+        parseISO(tx.createdAt) >= since,
+    )
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  return earned > 0 ? earned / days : 0;
+}
+
+/**
+ * Estimated whole days until `shortfall` is covered at the recent earning rate.
+ * Returns 0 when already affordable, null when the rate is unknown (no recent earning).
+ */
+export function getDaysToAfford(
+  shortfall: number,
+  dailyRate: number,
+): number | null {
+  if (shortfall <= 0) return 0;
+  if (dailyRate <= 0) return null;
+  return Math.ceil(shortfall / dailyRate);
+}
+
 export function findNearestUnlockWish(
   wishes: Wish[],
   balance: number,

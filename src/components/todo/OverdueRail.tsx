@@ -17,6 +17,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
+/** Droppable id for the staging ("暫放") area. */
+export const STAGING_ID = 'staging';
+
 interface OverdueRailProps {
   /** Overdue + parked tasks shown in the staging area. */
   tasks: Task[];

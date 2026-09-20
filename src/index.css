@@ -73,3 +73,49 @@ body {
 .hud-float {
   animation: hud-float-up 1s ease-out forwards;
 }
+
+/* ── Installed-app (standalone) polish ─────────────────────────────
+   With apple-mobile-web-app-status-bar-style=black-translucent the page
+   paints under the status bar, so the sticky header needs the safe-area
+   inset or it sits beneath the notch/clock. */
+body {
+  /* Prevent the whole page rubber-banding like a web page on iOS. */
+  overscroll-behavior-y: none;
+}
+
+@supports (padding: env(safe-area-inset-top)) {
+  @media (display-mode: standalone) {
+    header {
+      padding-top: env(safe-area-inset-top);
+    }
+  }
+}
+
+/* Side insets for landscape / devices with rounded corners. */
+@media (display-mode: standalone) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Installed apps shouldn't feel text-selectable like a document, but inputs
+   and user content must stay selectable. */
+@media (display-mode: standalone) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  input,
+  textarea,
+  [contenteditable],
+  p,
+  li,
+  h1,
+  h2,
+  h3 {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}

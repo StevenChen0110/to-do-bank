@@ -1,3 +1,4 @@
+import { addDays, parse } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 import { create } from 'zustand';
 import type {
@@ -5,6 +6,7 @@ import type {
   AppSettings,
   CategoryDef,
   Habit,
+  JarvisProfile,
   JournalEntry,
   LogTaskOptions,
   Project,
@@ -14,12 +16,13 @@ import type {
   Task,
   TaskCategory,
   TaskPriority,
+  TaskSource,
   Transaction,
   Wish,
 } from '../types';
 import { allCategories } from '../lib/categories';
 import { localDateString } from '../lib/dates';
-import { dueToday } from '../lib/habits';
+import { dueToday, habitTaskFor } from '../lib/habits';
 import {
   clearJournalCredit,
   DIARY_TASK_TITLE,
@@ -87,14 +90,21 @@ interface AppStore extends PersistableState {
     dateKey: string,
     content: string,
   ) => { entry: JournalEntry; creditedAmount: number | null };
-  addWish: (input: Pick<Wish, 'title' | 'cost'>) => void;
+  addWish: (
+    input: Pick<Wish, 'title' | 'cost'> &
+      Partial<Pick<Wish, 'productUrl' | 'imageUrl'>>,
+  ) => void;
   updateWish: (
     wishId: string,
-    patch: Partial<Pick<Wish, 'title' | 'cost'>>,
+    patch: Partial<Pick<Wish, 'title' | 'cost' | 'productUrl' | 'imageUrl'>>,
   ) => void;
   deleteWish: (wishId: string) => void;
   redeemWish: (wishId: string) => void;
   setPinnedWishId: (wishId: string | null) => void;
+  setShopPreferences: (categoryIds: string[]) => void;
+  setJarvisProfile: (profile: JarvisProfile) => void;
+  /** Work OS: record the active 職能 and which categories belong to 工作. */
+  setWorkRole: (roleId: string | undefined, categoryIds: string[]) => void;
   addCategory: (label: string) => CategoryDef | null;
   deleteCategory: (id: string) => void;
   addHabit: (input: AddHabitInput) => void;
@@ -108,6 +118,12 @@ interface AppStore extends PersistableState {
   deleteHabit: (id: string) => void;
   /** Create today's missing habit task instances. Idempotent. */
   materializeHabitTasks: (dateKey: string) => void;
+  /**
+   * Credit `count` habit completions at once — completes today first, then
+   * back-fills the most recent missed due-days (so you can log several at once
+   * and make up for skipped days). Returns how many were actually credited.
+   */
+  completeHabitTimes: (habitId: string, count: number) => number;
   addProject: (input: {
     title: string;
     goal?: string;
@@ -231,6 +247,7 @@ function createCompletedTask(
   scheduledDate: string,
   reward: number,
   now: string,
+  source?: TaskSource,
 ): AppStore {
   const task: Task = {
     id: uuidv4(),
@@ -240,6 +257,7 @@ function createCompletedTask(
     scheduledDate,
     completedAt: now,
     createdAt: now,
+    ...(source ? { source } : {}),
   };
 
   const transaction: Transaction = {
@@ -661,6 +679,8 @@ export const useAppStore = create<AppStore>((set) => ({
         cost: input.cost,
         createdAt: now,
         redeemedAt: null,
+        ...(input.productUrl ? { productUrl: input.productUrl } : {}),
+        ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
       };
       const next: AppStore = {
         ...state,
@@ -740,6 +760,39 @@ export const useAppStore = create<AppStore>((set) => ({
       const next: AppStore = {
         ...state,
         settings: { ...state.settings, pinnedWishId: wishId },
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  setShopPreferences: (categoryIds) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        settings: { ...state.settings, shopPreferences: categoryIds },
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  setWorkRole: (roleId, categoryIds) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        settings: { ...state.settings, workRole: roleId, workCategoryIds: categoryIds },
+      };
+      schedulePersist(toPersistable(next));
+      return next;
+    });
+  },
+
+  setJarvisProfile: (profile) => {
+    set((state) => {
+      const next: AppStore = {
+        ...state,
+        settings: { ...state.settings, jarvis: profile },
       };
       schedulePersist(toPersistable(next));
       return next;
@@ -879,6 +932,46 @@ export const useAppStore = create<AppStore>((set) => ({
       schedulePersist(toPersistable(next));
       return next;
     });
+  },
+
+  completeHabitTimes: (habitId, count) => {
+    let credited = 0;
+    set((state) => {
+      const habit = state.habits.find((h) => h.id === habitId);
+      if (!habit || count <= 0) return state;
+      const now = new Date().toISOString();
+      const source: TaskSource = { type: 'habit', refId: habit.id };
+      let working: AppStore = state;
+      let remaining = count;
+
+      // Credit one due-day: complete its existing instance, or (for a missed /
+      // never-materialized day) create an already-completed one. Reuses the
+      // shared task+transaction builders so the credit shape stays in one place.
+      const creditDay = (key: string) => {
+        const t = habitTaskFor(working.tasks, habit.id, key);
+        if (t?.completedAt != null) return; // already done → skip
+        working = t
+          ? completeTaskInState(working, t.id, now) ?? working
+          : createCompletedTask(working, habit.title, habit.category, key, habit.reward, now, source);
+        remaining -= 1;
+        credited += 1;
+      };
+
+      // Walk from today backwards through due-days (today first, then make up
+      // the most recent missed days) until the count is met or we hit the start.
+      let cursor = parse(localDateString(), 'yyyy-MM-dd', new Date());
+      for (let guard = 0; remaining > 0 && guard < 400; guard += 1) {
+        const key = localDateString(cursor);
+        if (key < habit.startDate) break;
+        if (dueToday(habit, key)) creditDay(key);
+        cursor = addDays(cursor, -1);
+      }
+
+      if (credited === 0) return state;
+      schedulePersist(toPersistable(working));
+      return working;
+    });
+    return credited;
   },
 
   addProject: (input) => {

@@ -22,9 +22,11 @@ import { cn } from '@/lib/utils';
 
 interface QuickAddInputProps {
   scheduledDate: string;
+  /** Called after a task is successfully added (e.g. to close a popover). */
+  onAdded?: () => void;
 }
 
-export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
+export function QuickAddInput({ scheduledDate, onAdded }: QuickAddInputProps) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('other');
   const [taskSize, setTaskSize] = useState<TaskSize>('small');
@@ -78,6 +80,7 @@ export function QuickAddInput({ scheduledDate }: QuickAddInputProps) {
 
     setTitle('');
     setCategory('other');
+    onAdded?.();
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {

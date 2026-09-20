@@ -58,6 +58,10 @@ export interface Wish {
   cost: number;
   createdAt: string;
   redeemedAt: string | null;
+  /** Real product this wish points at (Phase 1 e-commerce link). */
+  productUrl?: string;
+  /** Product image (OG-scraped or pasted) — shown on the shop card. */
+  imageUrl?: string;
 }
 
 export interface Transaction {
@@ -95,8 +99,41 @@ export interface AppSettings {
   pinnedWishId: string | null;
   /** User-defined categories appended after built-ins */
   customCategories: CategoryDef[];
+  /** Shop preference category ids — drives reward recommendations. */
+  shopPreferences?: string[];
+  /** JARVIS personal-context profile — drives relevance scoring. */
+  jarvis?: JarvisProfile;
+  /** Work OS: active 職能 template id (see lib/workRoles). */
+  workRole?: string;
+  /** Work OS: category ids scoped to 工作 (keeps personal ones out). */
+  workCategoryIds?: string[];
   /** LINE daily-nudge preferences (set via the LINE bot). Preserved as-is. */
   nudge?: NudgeSettings;
+}
+
+/**
+ * Personal-context profile for the JARVIS intelligence layer. Lives inside
+ * AppSettings (synced with the rest of the blob); the server reads it to score
+ * how relevant each piece of information is to this user. All fields optional
+ * so an empty profile is valid.
+ */
+export interface JarvisProfile {
+  /** Free-form interest tags: "AI", "product management", "投資"… */
+  interests: string[];
+  /** Tickers to track: "TSM", "NVDA", "0050"… */
+  watchlist: string[];
+  /** Markets followed: "TW", "US"… */
+  markets: string[];
+  /** Risk appetite for investment framing. */
+  riskPreference?: 'low' | 'medium' | 'high';
+  /** Career roles of interest: "Product Manager", "GTM"… */
+  careerRoles: string[];
+  /** Industries followed. */
+  industries: string[];
+  /** Names of current personal projects. */
+  projects: string[];
+  /** Companies to keep an eye on. */
+  companies: string[];
 }
 
 export interface NudgeSettings {

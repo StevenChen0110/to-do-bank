@@ -1,4 +1,4 @@
-import { get } from 'idb-keyval';
+import { get, set } from 'idb-keyval';
 import { supabase } from './supabase';
 import type { AppData, AppSettings, LegacyWish, Wish } from '../types';
 import { normalizeSettings } from './settings';
@@ -67,18 +67,35 @@ export function setCurrentUser(uid: string | null) {
   _userId = uid && uid.length > 0 ? uid : null;
 }
 
+/** Per-user offline mirror of the last successfully loaded cloud blob. */
+function offlineKey(userId: string): string {
+  return `${IDB_KEY}:${userId}`;
+}
+
 export async function loadAppData(): Promise<AppData> {
   if (!_userId) return { ...EMPTY_DATA };
 
-  // Try loading from Supabase
-  const { data: row } = await supabase
-    .from('user_data')
-    .select('data')
-    .eq('user_id', _userId)
-    .maybeSingle();
+  // Try loading from Supabase. Offline (or Supabase unreachable) this throws
+  // or returns an error — the installed PWA must still open, so fall back to
+  // the local mirror instead of hanging on the loading screen.
+  try {
+    const { data: row, error } = await supabase
+      .from('user_data')
+      .select('data')
+      .eq('user_id', _userId)
+      .maybeSingle();
+    if (error) throw error;
 
-  if (row?.data) {
-    return parseStoredData(row.data);
+    if (row?.data) {
+      const parsed = parseStoredData(row.data);
+      // Mirror locally so the next cold start works without a network.
+      void set(offlineKey(_userId), row.data).catch(() => {});
+      return parsed;
+    }
+  } catch {
+    const cached = await get<unknown>(offlineKey(_userId)).catch(() => undefined);
+    if (cached) return parseStoredData(cached);
+    return { ...EMPTY_DATA };
   }
 
   // No cloud data yet — check for local IndexedDB data to migrate
@@ -94,9 +111,15 @@ export async function loadAppData(): Promise<AppData> {
 
 export async function saveAppData(data: AppData): Promise<void> {
   if (!_userId) return;
-  await supabase
-    .from('user_data')
-    .upsert({ user_id: _userId, data, updated_at: new Date().toISOString() });
+  // Always mirror locally first so offline edits survive a cold start.
+  void set(offlineKey(_userId), data).catch(() => {});
+  try {
+    await supabase
+      .from('user_data')
+      .upsert({ user_id: _userId, data, updated_at: new Date().toISOString() });
+  } catch {
+    // Offline — the local mirror holds the change; next successful save syncs.
+  }
 }
 
 /** Load a specific user_id's blob (used when merging accounts at link time). */

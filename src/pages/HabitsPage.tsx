@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Circle,
   Flame,
+  Minus,
   Plus,
   RotateCcw,
   Trash2,
@@ -44,6 +45,7 @@ export function HabitsPage() {
   const deleteHabit = useAppStore((s) => s.deleteHabit);
   const updateHabit = useAppStore((s) => s.updateHabit);
   const completeTask = useAppStore((s) => s.completeTask);
+  const completeHabitTimes = useAppStore((s) => s.completeHabitTimes);
   const materializeHabitTasks = useAppStore((s) => s.materializeHabitTasks);
   const { showToast } = useReward();
 
@@ -117,6 +119,21 @@ export function HabitsPage() {
       }
     }
     showToast(`+NT$${task.reward} 已入帳`, 'success', detail);
+  };
+
+  // 一次記錄多次（含補做過去漏掉的天）。
+  const logHabitTimes = (habit: Habit, n: number) => {
+    if (n <= 0) return;
+    unlockAudioFromGesture();
+    const credited = completeHabitTimes(habit.id, n);
+    if (credited === 0) {
+      showToast('沒有可補記的次數', 'info', '今天與過去到起始日都已完成');
+      return;
+    }
+    if (settings.soundEnabled) playDepositChime();
+    const note =
+      credited < n ? `記錄 ${credited} 次（已補到起始日）` : `記錄 ${credited} 次`;
+    showToast(`+NT$${habit.reward * credited} 已入帳`, 'success', note);
   };
 
   return (
@@ -324,6 +341,9 @@ export function HabitsPage() {
                   </div>
                 </div>
 
+                {/* 一次記錄多次 / 補做過去 */}
+                <TimesStepper onSubmit={(n) => logHabitTimes(habit, n)} />
+
                 {/* 打卡格 */}
                 <div className="mt-3">
                   <HabitCalendar habit={habit} tasks={tasks} />
@@ -401,6 +421,47 @@ export function HabitsPage() {
           )}
         </section>
       )}
+    </div>
+  );
+}
+
+/** Stepper to log a habit several times at once (make up missed days). */
+function TimesStepper({ onSubmit }: { onSubmit: (n: number) => void }) {
+  const [n, setN] = useState(1);
+  return (
+    <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5">
+      <span className="text-xs text-muted-foreground">記錄次數</span>
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setN((v) => Math.max(1, v - 1))}
+          aria-label="減少次數"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:text-foreground active:scale-90 disabled:opacity-40"
+          disabled={n <= 1}
+        >
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <span className="w-6 text-center text-sm font-semibold tabular-nums">{n}</span>
+        <button
+          type="button"
+          onClick={() => setN((v) => Math.min(99, v + 1))}
+          aria-label="增加次數"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:text-foreground active:scale-90"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        className="h-8"
+        onClick={() => {
+          onSubmit(n);
+          setN(1);
+        }}
+      >
+        完成
+      </Button>
     </div>
   );
 }
