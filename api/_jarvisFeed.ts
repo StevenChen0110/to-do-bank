@@ -1,8 +1,8 @@
 // Orchestrates one JARVIS feed refresh: ingest RSS → score/summarize via LLM →
 // merge back source metadata → filtered, sorted items. Shared by the Vercel
 // function (api/jarvis-feed.ts) and the Vite dev middleware so local === prod.
-import { fetchRawItems } from './_jarvisSources';
-import { scoreItems, type JarvisProfileInput } from './_jarvisLLM';
+import { fetchRawItems } from './_jarvisSources.js';
+import { scoreItems, type JarvisProfileInput } from './_jarvisLLM.js';
 
 export interface JarvisItemOut {
   id: string;

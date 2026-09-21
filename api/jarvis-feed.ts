@@ -2,8 +2,8 @@
 // Ingests RSS, scores/summarizes with the LLM, returns filtered items.
 // On any failure (no key, ingest/LLM error) returns fallback:true so the
 // client keeps its local demo data instead of showing an error.
-import { buildJarvisFeed } from './_jarvisFeed';
-import type { JarvisProfileInput } from './_jarvisLLM';
+import { buildJarvisFeed } from './_jarvisFeed.js';
+import type { JarvisProfileInput } from './_jarvisLLM.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {

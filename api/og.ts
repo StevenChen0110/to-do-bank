@@ -1,6 +1,6 @@
 // GET /api/og?url=<product url> → { title, image, price, siteName }
 // Server-side so it isn't blocked by browser CORS. Best-effort scrape.
-import { fetchOgProduct } from './_ogCore';
+import { fetchOgProduct } from './_ogCore.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {

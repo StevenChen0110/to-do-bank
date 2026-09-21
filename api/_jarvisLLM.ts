@@ -2,7 +2,7 @@
 // (currently Google Gemini). Given raw feed items + the user's profile, it
 // returns relevance-scored, summarized items — aggressively filtered so only
 // what THIS user should care about survives.
-import type { RawItem } from './_jarvisSources';
+import type { RawItem } from './_jarvisSources.js';
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
